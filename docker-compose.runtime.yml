@@ -1,0 +1,6 @@
+services:
+  app:
+    environment:
+      - INTERNAL_PORT=${INTERNAL_PORT:-8000}
+    ports:
+      - "${APP_PORT:?APP_PORT must be set}:${INTERNAL_PORT:-8000}"
