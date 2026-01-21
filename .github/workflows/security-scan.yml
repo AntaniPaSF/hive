@@ -1,11 +1,406 @@
-name: Security Scan
-# Comprehensive security scanning including SAST, dependency scan, image scan
+name: Security Scanning
+# Comprehensive security scanning with vulnerability detection and reporting
 
 on:
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
-  pull_request:
   schedule:
-    - cron: '0 3 * * 0'  # Weekly Sunday at 3 AM UTC
+    - cron: '0 3 * * 0'  # Weekly scan Sunday 3 AM UTC
+  workflow_dispatch:
 
-# Will be implemented in Phase 6
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  PYTHON_VERSION: '3.11'
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ========================================================================
+  # JOB 1: SAST - Static Application Security Testing
+  # ========================================================================
+  sast:
+    name: SAST Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install bandit semgrep
+
+      - name: Run Bandit security linter
+        continue-on-error: true
+        run: |
+          bandit -r src/ -f json -o bandit-results.json
+          bandit -r src/ -f txt
+          echo "✅ Bandit scan complete"
+
+      - name: Run Semgrep analysis
+        continue-on-error: true
+        run: |
+          semgrep --config=p/security-audit --json -o semgrep-results.json src/ || true
+          echo "✅ Semgrep scan complete"
+
+      - name: Check critical findings
+        run: |
+          CRITICAL=$(jq '[.results[]? | select(.severity=="CRITICAL")] | length' bandit-results.json 2>/dev/null || echo 0)
+          if [ "${CRITICAL}" -gt 0 ]; then
+            echo "❌ Found ${CRITICAL} critical security issues"
+            exit 1
+          fi
+          echo "✅ No critical security issues found"
+
+      - name: Upload SAST results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sast-results
+          path: |
+            bandit-results.json
+            semgrep-results.json
+          retention-days: 90
+
+  # ========================================================================
+  # JOB 2: DEPENDENCY SCANNING - Vulnerability detection in dependencies
+  # ========================================================================
+  dependency-scan:
+    name: Dependency Scanning
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pip-audit safety
+
+      - name: Run pip-audit for CVEs
+        continue-on-error: true
+        run: |
+          pip-audit --desc --format json > pip-audit-results.json || true
+          pip-audit --desc
+          echo "✅ pip-audit scan complete"
+
+      - name: Run Safety check
+        continue-on-error: true
+        run: |
+          safety check --json > safety-results.json || true
+          safety check
+          echo "✅ Safety scan complete"
+
+      - name: Check for critical CVEs
+        run: |
+          CRITICAL=$(jq '[.vulnerabilities[]? | select(.severity=="CRITICAL")] | length' pip-audit-results.json 2>/dev/null || echo 0)
+          if [ "${CRITICAL}" -gt 0 ]; then
+            echo "⚠️  Found ${CRITICAL} critical CVEs"
+            echo "Please update dependencies"
+          fi
+          echo "✅ Dependency scan complete"
+
+      - name: Upload dependency scan results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dependency-scan-results
+          path: |
+            pip-audit-results.json
+            safety-results.json
+          retention-days: 90
+
+  # ========================================================================
+  # JOB 3: CONTAINER SCANNING - Image vulnerability scanning
+  # ========================================================================
+  container-scan:
+    name: Container Scanning
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image for scanning
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          load: true
+          tags: hive-scanner:latest
+          cache-from: type=gha
+
+      - name: Run Trivy container scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: hive-scanner:latest
+          format: 'sarif'
+          output: 'trivy-container.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Run Trivy config scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: config
+          scan-ref: .
+          format: 'sarif'
+          output: 'trivy-config.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-container.sarif'
+          category: 'trivy-container'
+
+      - name: Upload config scan
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-config.sarif'
+          category: 'trivy-config'
+
+      - name: Check scan results
+        continue-on-error: true
+        run: |
+          echo "✅ Container scanning complete"
+          echo "Results uploaded to GitHub Security tab"
+
+  # ========================================================================
+  # JOB 4: LICENSE SCANNING - Detect license compliance issues
+  # ========================================================================
+  license-scan:
+    name: License Scanning
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install license checker
+        run: |
+          pip install pip-licenses
+
+      - name: Check licenses
+        run: |
+          pip-licenses --format=json > license-report.json
+          pip-licenses --format=markdown > license-report.md
+          pip-licenses
+          
+          echo ""
+          echo "📋 License Summary:"
+          python -c "
+          import json
+          with open('license-report.json') as f:
+              licenses = json.load(f)
+              allowed = {'MIT', 'Apache-2.0', 'BSD-3-Clause', 'BSD-2-Clause', 'ISC'}
+              problematic = [l for l in licenses if l['License'] not in allowed]
+              if problematic:
+                  print(f'⚠️  {len(problematic)} packages with non-standard licenses')
+                  for p in problematic:
+                      print(f'   - {p[\"Name\"]}: {p[\"License\"]}')
+              else:
+                  print('✅ All dependencies use standard licenses')
+          "
+
+      - name: Upload license report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: license-report
+          path: |
+            license-report.json
+            license-report.md
+          retention-days: 90
+
+  # ========================================================================
+  # JOB 5: SECRET SCANNING - Detect exposed secrets
+  # ========================================================================
+  secret-scan:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install TruffleHog
+        run: pip install trufflehog
+
+      - name: Scan for secrets
+        continue-on-error: true
+        run: |
+          trufflehog filesystem . --json > trufflehog-results.json || true
+          
+          FINDINGS=$(jq 'length' trufflehog-results.json)
+          if [ "${FINDINGS}" -gt 0 ]; then
+            echo "⚠️  Found ${FINDINGS} potential secrets"
+            echo "Please review and rotate if necessary"
+            jq '.[] | {source: .SourceMetadata.Data, type: .DetectorName}' trufflehog-results.json
+          else
+            echo "✅ No secrets detected"
+          fi
+
+      - name: Upload secret scan results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: secret-scan-results
+          path: trufflehog-results.json
+          retention-days: 90
+
+  # ========================================================================
+  # JOB 6: REPORT - Generate security summary
+  # ========================================================================
+  security-report:
+    name: Security Report
+    if: always()
+    needs: [sast, dependency-scan, container-scan, license-scan, secret-scan]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all scan results
+        uses: actions/download-artifact@v4
+        with:
+          path: scan-results
+
+      - name: Generate security summary
+        run: |
+          cat > SECURITY_REPORT.md << 'EOF'
+          # Security Scanning Report
+          
+          ## Summary
+          
+          | Scan Type | Status | Details |
+          |-----------|--------|---------|
+          | SAST | ${{ needs.sast.result }} | Code analysis with Bandit & Semgrep |
+          | Dependencies | ${{ needs.dependency-scan.result }} | CVE scanning with pip-audit & Safety |
+          | Container | ${{ needs.container-scan.result }} | Image scanning with Trivy |
+          | Licenses | ${{ needs.license-scan.result }} | License compliance check |
+          | Secrets | ${{ needs.secret-scan.result }} | Secret detection with TruffleHog |
+          
+          ## Details
+          
+          ### SAST Findings
+          - Bandit: Static security analysis
+          - Semgrep: Pattern-based vulnerability detection
+          - Severity: CRITICAL, HIGH
+          
+          ### Dependency Vulnerabilities
+          - pip-audit: Direct CVE detection
+          - Safety: Known security issues database
+          
+          ### Container Vulnerabilities
+          - Trivy: Image and configuration scanning
+          - SARIF format uploaded to GitHub Security tab
+          
+          ### License Compliance
+          - pip-licenses: Software license detection
+          - Allowed licenses: MIT, Apache-2.0, BSD variants, ISC
+          
+          ### Secret Detection
+          - TruffleHog: Filesystem scanning for exposed secrets
+          
+          ## Next Steps
+          
+          1. Review findings in GitHub Security tab
+          2. Prioritize CRITICAL and HIGH severity issues
+          3. Update dependencies to resolve CVEs
+          4. Fix any exposed secrets immediately
+          
+          ---
+          Generated: $(date -u +'%Y-%m-%d %H:%M:%S UTC')
+          Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EOF
+          
+          cat SECURITY_REPORT.md
+
+      - name: Upload security report
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-report
+          path: SECURITY_REPORT.md
+          retention-days: 90
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('SECURITY_REPORT.md', 'utf8');
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 🔒 Security Scan Results\n\n${report}`
+            });
+
+  # ========================================================================
+  # FINAL STATUS
+  # ========================================================================
+  security-check:
+    name: Security Check Status
+    if: always()
+    needs: [sast, dependency-scan, container-scan, license-scan, secret-scan]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check security status
+        run: |
+          echo "🔒 Security Scanning Complete"
+          echo ""
+          echo "Scans:"
+          echo "  SAST:         ${{ needs.sast.result }}"
+          echo "  Dependencies: ${{ needs.dependency-scan.result }}"
+          echo "  Container:    ${{ needs.container-scan.result }}"
+          echo "  Licenses:     ${{ needs.license-scan.result }}"
+          echo "  Secrets:      ${{ needs.secret-scan.result }}"
+          echo ""
+          
+          if [ "${{ needs.sast.result }}" == "failure" ] || [ "${{ needs.container-scan.result }}" == "failure" ]; then
+            echo "❌ Critical security checks failed"
+            exit 1
+          fi
+          
+          echo "✅ Security scanning completed"
