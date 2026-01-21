@@ -2,7 +2,7 @@
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
 **Created**: 2026-01-21
-**Feature**: [specs/001-project-skeleton/spec.md](specs/001-project-skeleton/spec.md)
+**Feature**: [specs/001-project-skeleton/spec.md](../spec.md)
 
 ## Content Quality
 
