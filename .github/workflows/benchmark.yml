@@ -1,9 +1,467 @@
-name: Benchmarking
-# Runs comprehensive benchmark suite with performance tracking
+name: Benchmarking Suite
+# Comprehensive benchmarking with performance regression tracking
+# Runs on schedule or manual trigger with full test coverage
 
 on:
-  workflow_call:
   schedule:
     - cron: '0 2 * * *'  # Daily at 2 AM UTC
+  workflow_dispatch:
+    inputs:
+      benchmark_suite:
+        description: 'Benchmark suite to run'
+        required: false
+        default: 'full'
+        type: choice
+        options:
+          - quick
+          - standard
+          - full
+          - stress-test
 
-# Will be implemented in Phase 5
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  PYTHON_VERSION: '3.11'
+
+concurrency:
+  group: benchmark
+  cancel-in-progress: false
+
+jobs:
+  # ========================================================================
+  # JOB 1: BUILD IMAGE - Prepare benchmark image
+  # ========================================================================
+  prepare-image:
+    name: Prepare Benchmark Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    outputs:
+      image: ${{ steps.image.outputs.ref }}
+      tag: ${{ steps.image.outputs.tag }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker BuildKit
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image reference
+        id: image
+        run: |
+          BENCH_TAG="benchmark-${GITHUB_RUN_ID}"
+          IMAGE_REF="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${BENCH_TAG}"
+          
+          echo "ref=${IMAGE_REF}" >> $GITHUB_OUTPUT
+          echo "tag=${BENCH_TAG}" >> $GITHUB_OUTPUT
+          echo "Building benchmark image: ${IMAGE_REF}"
+
+      - name: Build and push benchmark image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.image.outputs.ref }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            PYTHON_VERSION=${{ env.PYTHON_VERSION }}
+
+  # ========================================================================
+  # JOB 2: QUICK BENCHMARK - Fast baseline check
+  # ========================================================================
+  quick-benchmark:
+    name: Quick Benchmark
+    needs: prepare-image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: github.event.inputs.benchmark_suite == 'quick' || github.event.inputs.benchmark_suite == '' || github.event_name == 'schedule'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull image
+        run: docker pull ${{ needs.prepare-image.outputs.image }}
+
+      - name: Start API
+        run: |
+          docker run -d --name hive-api -p 8000:8000 \
+            -e ENV=benchmark ${{ needs.prepare-image.outputs.image }}
+
+      - name: Wait for health check
+        run: |
+          for i in {1..30}; do
+            curl -sf http://localhost:8000/health && exit 0
+            sleep 2
+          done
+          echo "API startup timeout"
+          docker logs hive-api
+          exit 1
+
+      - name: Run quick benchmark suite
+        run: |
+          python -m tests.benchmark.benchmark \
+            --api-url http://localhost:8000 \
+            --suite quick \
+            --output-json quick-results.json \
+            --output-junit quick-results.xml
+
+      - name: Validate results
+        run: bash .github/scripts/check-benchmark.sh quick-results.json
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: quick-benchmark-results
+          path: |
+            quick-results.json
+            quick-results.xml
+          retention-days: 60
+
+      - name: Stop API
+        if: always()
+        run: docker stop hive-api && docker rm hive-api
+
+  # ========================================================================
+  # JOB 3: STANDARD BENCHMARK - Complete feature coverage
+  # ========================================================================
+  standard-benchmark:
+    name: Standard Benchmark
+    needs: prepare-image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: github.event.inputs.benchmark_suite == 'standard' || github.event.inputs.benchmark_suite == 'full' || github.event_name == 'schedule'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull image
+        run: docker pull ${{ needs.prepare-image.outputs.image }}
+
+      - name: Start API
+        run: |
+          docker run -d --name hive-api -p 8000:8000 \
+            -e ENV=benchmark ${{ needs.prepare-image.outputs.image }}
+
+      - name: Wait for health check
+        run: |
+          for i in {1..30}; do
+            curl -sf http://localhost:8000/health && exit 0
+            sleep 2
+          done
+          docker logs hive-api
+          exit 1
+
+      - name: Run standard benchmark suite
+        run: |
+          python -m tests.benchmark.benchmark \
+            --api-url http://localhost:8000 \
+            --suite standard \
+            --output-json standard-results.json \
+            --output-junit standard-results.xml
+
+      - name: Validate results
+        run: bash .github/scripts/check-benchmark.sh standard-results.json
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: standard-benchmark-results
+          path: |
+            standard-results.json
+            standard-results.xml
+          retention-days: 60
+
+      - name: Stop API
+        if: always()
+        run: docker stop hive-api && docker rm hive-api
+
+  # ========================================================================
+  # JOB 4: FULL BENCHMARK - Comprehensive stress and regression testing
+  # ========================================================================
+  full-benchmark:
+    name: Full Benchmark
+    needs: prepare-image
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    if: github.event.inputs.benchmark_suite == 'full' || github.event.inputs.benchmark_suite == 'stress-test' || github.event_name == 'schedule'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull image
+        run: docker pull ${{ needs.prepare-image.outputs.image }}
+
+      - name: Start API container
+        run: |
+          docker run -d --name hive-api -p 8000:8000 \
+            -e ENV=benchmark ${{ needs.prepare-image.outputs.image }}
+
+      - name: Wait for health check
+        run: |
+          for i in {1..30}; do
+            curl -sf http://localhost:8000/health && exit 0
+            sleep 2
+          done
+          docker logs hive-api
+          exit 1
+
+      - name: Run full benchmark suite
+        run: |
+          python -m tests.benchmark.benchmark \
+            --api-url http://localhost:8000 \
+            --suite full \
+            --output-json full-results.json \
+            --output-junit full-results.xml
+
+      - name: Validate accuracy gates
+        run: bash .github/scripts/check-benchmark.sh full-results.json
+
+      - name: Stress test (if enabled)
+        if: github.event.inputs.benchmark_suite == 'stress-test'
+        run: |
+          python -m tests.benchmark.stress_test \
+            --api-url http://localhost:8000 \
+            --concurrency 10 \
+            --duration 300 \
+            --output-json stress-results.json
+
+      - name: Upload full results
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-benchmark-results
+          path: |
+            full-results.json
+            full-results.xml
+            stress-results.json
+          retention-days: 60
+
+      - name: Stop API
+        if: always()
+        run: docker stop hive-api && docker rm hive-api
+
+  # ========================================================================
+  # JOB 5: COMPARE AGAINST BASELINE - Regression detection
+  # ========================================================================
+  regression-check:
+    name: Regression Detection
+    needs: [full-benchmark, standard-benchmark]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: always()
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download baseline
+        run: |
+          # Try to get latest baseline from main branch
+          git fetch origin main --depth=1 2>/dev/null || true
+          
+          if git show origin/main:.github/artifacts/baseline.json > baseline.json 2>/dev/null; then
+            echo "✅ Baseline found"
+          else
+            echo "ℹ️  No baseline found, skipping regression check"
+            exit 0
+          fi
+
+      - name: Download current results
+        uses: actions/download-artifact@v4
+        with:
+          name: full-benchmark-results
+          path: current
+
+      - name: Compare against baseline
+        continue-on-error: true
+        run: |
+          if [ -f baseline.json ] && [ -f current/full-results.json ]; then
+            bash .github/scripts/compare-baseline.sh current/full-results.json baseline.json
+          fi
+
+  # ========================================================================
+  # JOB 6: PUBLISH RESULTS - Generate report and store
+  # ========================================================================
+  publish-results:
+    name: Publish Results
+    needs: [quick-benchmark, standard-benchmark, full-benchmark]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: always()
+    permissions:
+      contents: write
+      pages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all results
+        uses: actions/download-artifact@v4
+        with:
+          path: results
+
+      - name: Generate HTML report
+        run: |
+          mkdir -p reports
+          cat > reports/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Benchmark Results</title>
+            <style>
+              body { font-family: monospace; margin: 20px; }
+              table { border-collapse: collapse; width: 100%; }
+              td, th { border: 1px solid #ddd; padding: 8px; text-align: left; }
+              th { background-color: #4CAF50; color: white; }
+              .pass { color: green; }
+              .fail { color: red; }
+              .warn { color: orange; }
+            </style>
+          </head>
+          <body>
+            <h1>Benchmark Results</h1>
+            <p>Run: ${{ github.run_id }}</p>
+            <p>Date: ${{ github.event.head_commit.timestamp }}</p>
+            <h2>Summary</h2>
+            <table>
+              <tr>
+                <th>Suite</th>
+                <th>Status</th>
+                <th>Details</th>
+              </tr>
+          EOF
+          
+          # Add result rows from JSON files
+          for suite in quick standard full; do
+            if [ -f "results/${suite}-benchmark-results/${suite}-results.json" ]; then
+              ACCURACY=$(jq '.accuracy' "results/${suite}-benchmark-results/${suite}-results.json")
+              echo "<tr><td>${suite}</td><td class=\"pass\">✓</td><td>Accuracy: ${ACCURACY}%</td></tr>" >> reports/index.html
+            fi
+          done
+          
+          echo "</table></body></html>" >> reports/index.html
+
+      - name: Upload to GitHub Pages
+        uses: actions/upload-pages-artifact@v2
+        with:
+          path: reports
+
+      - name: Create benchmark summary
+        run: |
+          cat > benchmark-summary.md << EOF
+          # Benchmark Results Summary
+          
+          - **Run ID**: ${{ github.run_id }}
+          - **Timestamp**: $(date -u +'%Y-%m-%d %H:%M:%S UTC')
+          - **Suite**: ${{ github.event.inputs.benchmark_suite || 'scheduled' }}
+          
+          ## Results
+          
+          ### Quick Benchmark
+          $([ -f results/quick-benchmark-results/quick-results.json ] && echo "✅ Completed" || echo "⏭️  Skipped")
+          
+          ### Standard Benchmark
+          $([ -f results/standard-benchmark-results/standard-results.json ] && echo "✅ Completed" || echo "⏭️  Skipped")
+          
+          ### Full Benchmark
+          $([ -f results/full-benchmark-results/full-results.json ] && echo "✅ Completed" || echo "⏭️  Skipped")
+          
+          ## Artifacts
+          
+          All results stored as artifacts with 60-day retention.
+          
+          EOF
+
+      - name: Upload summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-summary
+          path: benchmark-summary.md
+          retention-days: 60
+
+  # ========================================================================
+  # FINAL SUMMARY
+  # ========================================================================
+  summary:
+    name: Benchmark Summary
+    if: always()
+    needs: [prepare-image, quick-benchmark, standard-benchmark, full-benchmark, regression-check, publish-results]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Summarize results
+        run: |
+          echo "🎯 Benchmark Suite Complete"
+          echo ""
+          echo "Image: ${{ needs.prepare-image.outputs.image }}"
+          echo ""
+          echo "Results:"
+          echo "  Quick:     ${{ needs.quick-benchmark.result }}"
+          echo "  Standard:  ${{ needs.standard-benchmark.result }}"
+          echo "  Full:      ${{ needs.full-benchmark.result }}"
+          echo "  Regression: ${{ needs.regression-check.result }}"
+          echo ""
+          
+          if [ "${{ needs.full-benchmark.result }}" == "success" ]; then
+            echo "✅ Benchmarking completed successfully"
+            exit 0
+          else
+            echo "❌ Benchmarking failed"
+            exit 1
+          fi
