@@ -1,0 +1,8 @@
+name: PR Validation
+# Runs on pull requests - tests, linting, build, and benchmarks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+# Will be implemented in Phase 3

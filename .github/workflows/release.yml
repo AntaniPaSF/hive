@@ -1,0 +1,9 @@
+name: Release
+# Creates releases and semantic versioning tags
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+# Will be implemented in Phase 4

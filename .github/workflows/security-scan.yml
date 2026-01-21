@@ -1,0 +1,11 @@
+name: Security Scan
+# Comprehensive security scanning including SAST, dependency scan, image scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '0 3 * * 0'  # Weekly Sunday at 3 AM UTC
+
+# Will be implemented in Phase 6
