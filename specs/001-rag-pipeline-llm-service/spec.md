@@ -1,88 +1,81 @@
-# Specification: Intelligent Knowledge Retrieval Service
+# Feature Specification: Intelligent Knowledge Retrieval Service
 
-## 1. Problem Statement & User Value
+**Feature Branch**: `001-rag-pipeline-llm-service`  
+**Created**: 2026-01-21  
+**Status**: Draft  
+**Input**: User description: "Users currently struggle to find specific information buried within large volumes of internal technical documentation. Manual searching is time-consuming and often leads to incomplete answers. Provide an automated interface that allows users to ask questions in natural language and receive immediate, synthesized answers strictly grounded in our internal documentation, including references to verify accuracy."
 
-**Problem:** Users currently struggle to find specific information buried within large volumes of internal technical documentation. Manual searching is time-consuming and often leads to incomplete answers.
-**Opportunity:** Provide an automated interface that allows users to ask questions in natural language and receive immediate, synthesized answers strictly grounded in our internal documentation, including references to verify accuracy.
-**Business Goal:** Reduce time-to-information for employees and increase trust in automated answers through transparency (citations).
+## User Scenarios & Testing *(mandatory)*
 
-## 2. User Personas & Scenarios
+### User Story 1 - Find Specific Information (Priority: P1)
 
-### Persona A: The Information Seeker (End User)
+An **Information Seeker** needs to find specific safety protocols or configuration steps without reading a 50-page PDF. They want to ask a question like "What is the protocol for X?" and get a direct summary.
 
-* **Scenario:** Needs to find specific safety protocols or configuration steps without reading a 50-page PDF.
-* **Goal:** Ask a question like "What is the protocol for X?" and get a direct summary.
+**Why this priority**: This is the core value proposition. Delivering accurate, cited answers directly impacts the user's trust and the system's utility. Aligns with constitution principles of Accuracy and Transparency.
 
-### Persona B: The Knowledge Manager (Data Admin)
+**Independent Test**: Can be fully tested by asking a question against a known document and verifying that the answer is correct, concise, and properly cited.
 
-* **Scenario:** Has a new set of compliance documents that need to be made searchable immediately.
-* **Goal:** Upload documents to the system so they become part of the knowledge base.
+**Acceptance Scenarios**:
 
-## 3. Functional Requirements
+1. **Given** a set of ingested documents, **When** a user asks a question whose answer is in a document, **Then** the system returns a synthesized answer with a citation to the source document.
+2. **Given** a set of ingested documents, **When** a user asks a question whose answer is not in any document, **Then** the system explicitly states that the information is unavailable.
 
-### 3.1. Knowledge Ingestion
+---
 
-* The system must accept text-based documents (e.g., PDF, Markdown, Text) as input.
-* The system will monitor a designated directory for new documents to ingest (polling).
-* A manual trigger (e.g., an API endpoint) must also be available to initiate ingestion for a specific file or directory.
-* The system must process these documents to make them searchable by meaning (semantic search) rather than just keywords.
-* For PDF documents, the system should attempt to parse structured content like tables and extract text from images (OCR).
-* **Constraint:** The system must not alter the factual content of the source documents during processing.
+### User Story 2 - Ingest New Knowledge (Priority: P1)
 
-### 3.2. Query & Retrieval
+A **Knowledge Manager** has a new set of compliance documents that need to be made searchable immediately. They need to be able to upload these documents to the system so they become part of the knowledge base.
 
-* The system must accept natural language queries from other services.
-* The system must identify the most relevant sections of text from the ingested knowledge base that pertain to the query.
-* If a query is ambiguous and could be interpreted in multiple ways, the system should return a list of possible answers, each with its own set of citations.
-* If no relevant information is found in the knowledge base, the system must explicitly state that the information is unavailable rather than fabricating an answer.
+**Why this priority**: The system is useless without up-to-date knowledge. This story ensures the system can be kept current. Aligns with constitution principle of being Self-Contained.
 
-### 3.3. Answer Generation
+**Independent Test**: Can be tested by adding a new document to the designated ingestion directory, triggering ingestion, and then asking a question that can only be answered from the new document.
 
-* The system must generate a coherent, natural language response based *only* on the retrieved information.
-* **Strict Constraint:** The system is prohibited from using outside knowledge or general internet data to answer questions; it must be strictly grounded in the provided context.
+**Acceptance Scenarios**:
 
-### 3.4. Citation & Transparency
+1. **Given** a new document is placed in the monitored directory, **When** the system's polling interval elapses, **Then** the document is processed and its content becomes searchable.
+2. **Given** a new document, **When** the manual ingestion API is called for that document, **Then** the document is processed and its content becomes searchable.
 
-* Every generated answer must include citations or references.
-* A citation must identify the specific document and, where possible, the specific section or page used to generate the answer.
+---
 
-## 4. Success Criteria (Measurable)
+## Requirements *(mandatory)*
 
-### 4.1. Accuracy
+### Functional Requirements
 
-* **Metric:** Hallucination Rate.
-* **Target:** 0% for factual claims (System must not invent facts not present in the text).
-* **Test:** A blind test of 50 questions against the source text; answers must be verifiable against the source.
+- **FR-001**: System MUST accept text-based documents (e.g., PDF, Markdown, Text) as input.
+- **FR-002**: System MUST monitor a designated directory for new documents to ingest (polling).
+- **FR-003**: A manual trigger (e.g., an API endpoint) MUST be available to initiate ingestion for a specific file or directory.
+- **FR-004**: System MUST process documents to make them searchable by meaning (semantic search).
+- **FR-005**: For PDF documents, the system MUST attempt to parse structured content like tables and extract text from images (OCR).
+- **FR-006**: System MUST NOT alter the factual content of the source documents during processing.
+- **FR-007**: System MUST accept natural language queries from other services.
+- **FR-008**: System MUST identify the most relevant sections of text from the ingested knowledge base that pertain to the query.
+- **FR-009**: If no relevant information is found, the system MUST explicitly state that the information is unavailable rather than fabricating an answer.
+- **FR-010**: System MUST generate a coherent, natural language response based *only* on the retrieved information.
+- **FR-011**: The system is prohibited from using outside knowledge or general internet data to answer questions.
+- **FR-012**: Every generated answer MUST include citations or references.
+- **FR-013**: A citation MUST identify the specific document and, where possible, the specific section or page.
+- **FR-014**: If a query is ambiguous, the system MUST return a list of possible answers, each with its own set of citations.
+- **FR-015**: The input interface MUST allow the submission of a text string (the query).
+- **FR-016**: The input interface MUST optionally allow filtering by document source.
+- **FR-017**: The output object MUST contain the answer, a list of source references, and a numerical confidence score (0.0 to 1.0).
+- **FR-018**: In an "I Don't Know" scenario, the output MUST be `{"answer": null, "citations": [], "message": "Information not found in the knowledge base."}`.
 
-### 4.2. Retrieval Relevance
+### Key Entities
 
-* **Metric:** Retrieval Precision.
-* **Target:** For a given query, the top 3 retrieved document segments must contain the correct answer 90% of the time.
+- **Knowledge Document**: Represents a single document in the system (e.g., PDF, Markdown). Attributes: Source Path, Content, Processed Chunks.
+- **Query**: Represents a user's question. Attributes: Text, Filters.
+- **Answer**: Represents the system's response. Attributes: Generated Text, Citations, Confidence Score.
+- **Citation**: Represents a reference to a source document. Attributes: Document Name, Excerpt/Location.
 
-### 4.3. Performance
+## Success Criteria *(mandatory)*
 
-* **Metric:** Response Latency.
-* **Target:** The system must return a complete answer and citations within 5 seconds for a standard query (under average load).
+### Measurable Outcomes
 
-## 5. Interface Contracts (Abstract)
+- **SC-001**: **Accuracy (Hallucination Rate)**: 0% for factual claims. System must not invent facts not present in the source text. (Test: Blind test of 50 questions).
+- **SC-002**: **Retrieval Relevance (Precision)**: For a given query, the top 3 retrieved document segments must contain the correct answer 90% of the time.
+- **SC-003**: **Performance (Latency)**: The system must return a complete answer and citations within 5 seconds for a standard query under average load.
 
-### 5.1. Input Contract
-
-* The interface must allow the submission of a text string (the query).
-* The interface must optionally allow filtering by document source (e.g., "Only search the Safety Manual").
-
-### 5.2. Output Contract
-
-* The output object must contain three distinct elements:
-1. The generated answer string. If a query is ambiguous, this may be a list of answers.
-2. A list of source references (Document Name, Excerpt).
-3. A numerical confidence score from 0.0 to 1.0.
-
-* **"I Don't Know" Scenario**: If the system cannot find an answer, the output object will be `{"answer": null, "citations": [], "message": "Information not found in the knowledge base."}`.
-
-
-
-## 6. Dependencies & Assumptions
+## Dependencies & Assumptions
 
 * **Assumption:** Source documents are available in a readable digital text format (not handwritten or non-OCR images).
 * **Dependency:** This service depends on an upstream "Data Provider" service to supply the raw documents for ingestion. The primary mechanism will be polling a directory, with a manual trigger available.
