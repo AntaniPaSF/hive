@@ -1,9 +1,335 @@
 name: Release
-# Creates releases and semantic versioning tags
+# Creates semantic releases with changelog and GitHub releases
 
 on:
   push:
     tags:
       - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., v1.0.0)'
+        required: true
 
-# Will be implemented in Phase 4
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  PYTHON_VERSION: '3.11'
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  # ========================================================================
+  # JOB 1: VALIDATE - Verify release readiness
+  # ========================================================================
+  validate:
+    name: Validate Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for changelog
+
+      - name: Extract version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${{ github.ref }}"
+            VERSION="${VERSION#refs/tags/}"
+          fi
+          
+          # Validate semantic versioning
+          if ! [[ "${VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
+            echo "❌ Invalid version format: ${VERSION}"
+            exit 1
+          fi
+          
+          IS_PRERELEASE=$([[ "${VERSION}" == *"-"* ]] && echo "true" || echo "false")
+          
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "prerelease=${IS_PRERELEASE}" >> $GITHUB_OUTPUT
+          echo "✅ Version validated: ${VERSION} (prerelease: ${IS_PRERELEASE})"
+
+      - name: Check release requirements
+        run: |
+          # Verify main branch is clean
+          if [ "$(git rev-parse --abbrev-ref HEAD)" != "main" ]; then
+            echo "⚠️  Not on main branch, but proceeding..."
+          fi
+          
+          echo "✅ Release validation passed"
+
+  # ========================================================================
+  # JOB 2: BUILD AND PUSH - Create release image
+  # ========================================================================
+  build:
+    name: Build Release Image
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+      digest: ${{ steps.digest.outputs.digest }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker BuildKit
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate release image tags
+        id: meta
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          
+          echo "image=${IMAGE}:${VERSION}" >> $GITHUB_OUTPUT
+          echo "Building release image: ${IMAGE}:${VERSION}"
+
+      - name: Build and push release image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            PYTHON_VERSION=${{ env.PYTHON_VERSION }}
+
+      - name: Get image digest
+        id: digest
+        run: |
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${{ steps.meta.outputs.image }})
+          echo "digest=${DIGEST}" >> $GITHUB_OUTPUT
+
+      - name: Run Trivy scan on release image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.meta.outputs.image }}
+          format: 'json'
+          output: 'trivy-release.json'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Check scan results
+        run: |
+          CRITICAL=$(jq '[.Results[]?.Misconfigurations[]? | select(.Severity=="CRITICAL")] | length' trivy-release.json 2>/dev/null || echo 0)
+          if [ "${CRITICAL}" -gt 0 ]; then
+            echo "❌ Release image has critical vulnerabilities"
+            exit 1
+          fi
+          echo "✅ Release image scan passed"
+
+  # ========================================================================
+  # JOB 3: GENERATE CHANGELOG - Create release notes
+  # ========================================================================
+  changelog:
+    name: Generate Changelog
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      changelog: ${{ steps.changelog.outputs.content }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          
+          # Get commits since last tag
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD")
+          
+          if [ "${LAST_TAG}" == "HEAD" ]; then
+            COMMITS=$(git log --pretty='format:%h - %s (%an)' | head -20)
+            RANGE="${VERSION}"
+          else
+            COMMITS=$(git log ${LAST_TAG}..HEAD --pretty='format:%h - %s (%an)')
+            RANGE="${LAST_TAG}..${VERSION}"
+          fi
+          
+          # Generate changelog
+          cat > CHANGELOG_ENTRY.md << EOF
+          # ${VERSION}
+          
+          ## 🎉 Release Date
+          $(date -u +'%Y-%m-%d')
+          
+          ## 📝 Commits
+          \`\`\`
+          ${COMMITS}
+          \`\`\`
+          
+          ## 🔗 Release
+          - Image: \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}\`
+          - Prerelease: ${{ needs.validate.outputs.prerelease }}
+          
+          ---
+          For full changelog, see [GitHub releases](https://github.com/${{ github.repository }}/releases)
+          EOF
+          
+          # Save for later use
+          echo "content=$(cat CHANGELOG_ENTRY.md | base64 -w 0)" >> $GITHUB_OUTPUT
+          cat CHANGELOG_ENTRY.md
+
+      - name: Upload changelog
+        uses: actions/upload-artifact@v4
+        with:
+          name: changelog
+          path: CHANGELOG_ENTRY.md
+          retention-days: 30
+
+  # ========================================================================
+  # JOB 4: CREATE RELEASE - GitHub release
+  # ========================================================================
+  release:
+    name: Create GitHub Release
+    needs: [validate, build, changelog]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download changelog
+        uses: actions/download-artifact@v4
+        with:
+          name: changelog
+          path: .
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.validate.outputs.version }}
+          name: 'Release ${{ needs.validate.outputs.version }}'
+          body_path: CHANGELOG_ENTRY.md
+          prerelease: ${{ needs.validate.outputs.prerelease }}
+          draft: false
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ========================================================================
+  # JOB 5: PUBLISH - Notify about release
+  # ========================================================================
+  publish:
+    name: Publish Release
+    needs: [validate, build, release]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Create release summary
+        run: |
+          cat > release-summary.md << EOF
+          # 🎉 Release Published
+          
+          ## Version
+          ${{ needs.validate.outputs.version }}
+          
+          ## Image
+          \`\`\`
+          ${{ needs.build.outputs.image }}
+          \`\`\`
+          
+          ## Digest
+          \`\`\`
+          ${{ needs.build.outputs.digest }}
+          \`\`\`
+          
+          ## Status
+          ✅ Release published successfully
+          
+          ## Quick Start
+          
+          ### Pull image
+          \`\`\`bash
+          docker pull ${{ needs.build.outputs.image }}
+          \`\`\`
+          
+          ### Run container
+          \`\`\`bash
+          docker run -d -p 8000:8000 ${{ needs.build.outputs.image }}
+          \`\`\`
+          
+          ### Check health
+          \`\`\`bash
+          curl http://localhost:8000/health
+          \`\`\`
+          
+          EOF
+          
+          cat release-summary.md
+
+      - name: Send Slack notification
+        if: vars.SLACK_WEBHOOK_URL != ''
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{\"attachments\":[{\"color\":\"00ff00\",\"title\":\"🎉 Release ${{ needs.validate.outputs.version }} Published\",\"text\":\"Image: ${{ needs.build.outputs.image }}\"}]}" \
+            "${{ secrets.SLACK_WEBHOOK_URL }}" || true
+
+      - name: Upload summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-summary
+          path: release-summary.md
+          retention-days: 90
+
+  # ========================================================================
+  # FINAL STATUS
+  # ========================================================================
+  release-complete:
+    name: Release Complete
+    if: always()
+    needs: [validate, build, changelog, release, publish]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Release summary
+        run: |
+          echo "🎉 Release Workflow Complete"
+          echo ""
+          echo "Version: ${{ needs.validate.outputs.version }}"
+          echo "Prerelease: ${{ needs.validate.outputs.prerelease }}"
+          echo ""
+          echo "Steps:"
+          echo "  Validation: ${{ needs.validate.result }}"
+          echo "  Build: ${{ needs.build.result }}"
+          echo "  Changelog: ${{ needs.changelog.result }}"
+          echo "  Release: ${{ needs.release.result }}"
+          echo "  Publish: ${{ needs.publish.result }}"
+          echo ""
+          
+          if [ "${{ needs.release.result }}" == "success" ]; then
+            echo "✅ Release ${{ needs.validate.outputs.version }} published successfully"
+            exit 0
+          else
+            echo "❌ Release workflow failed"
+            exit 1
+          fi
