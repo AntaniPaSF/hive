@@ -1,0 +1,231 @@
+# LLM Benchmark Ground Truth Dataset
+#
+# This file contains question-answer pairs for validating the RAG-enabled
+# chatbot's accuracy, citation coverage, and performance.
+#
+# Format:
+#   - id: Unique identifier (e.g., Q001, Q002)
+#   - category: Question domain (vacation_policy, expense_policy, etc.)
+#   - question: The question text to send to the LLM API
+#   - expected_answer: Primary expected answer for accuracy validation
+#   - variations: Alternative acceptable answer formulations (optional)
+#   - citation_required: Whether citation is mandatory (default: true)
+#   - tags: Metadata tags for filtering/grouping (optional)
+
+version: "1.0.0"
+created: "2026-01-21"
+description: "Benchmark dataset for HR chatbot accuracy validation (MVP)"
+
+questions:
+  # Vacation Policy Questions
+  - id: "Q001"
+    category: "vacation_policy"
+    question: "How do I request vacation time?"
+    expected_answer: "Submit a vacation request through the employee portal at least 2 weeks in advance."
+    variations:
+      - "Submit vacation request via employee portal 2 weeks ahead."
+      - "Use the portal to request time off with 2-week notice."
+    citation_required: true
+    tags: ["time-off", "portal", "process"]
+
+  - id: "Q002"
+    category: "vacation_policy"
+    question: "How many vacation days do I get per year?"
+    expected_answer: "Full-time employees receive 20 vacation days per year."
+    variations:
+      - "20 days of vacation annually for full-time staff."
+      - "Full-time workers get 20 vacation days each year."
+    citation_required: true
+    tags: ["time-off", "benefits", "accrual"]
+
+  # Expense Policy Questions
+  - id: "Q003"
+    category: "expense_policy"
+    question: "What is the maximum daily meal allowance for business travel?"
+    expected_answer: "$75 per day for domestic travel, $100 for international."
+    variations:
+      - "Domestic travel: $75/day, International: $100/day for meals."
+      - "$75 daily meal limit domestic, $100 international."
+    citation_required: true
+    tags: ["expenses", "travel", "limits"]
+
+  - id: "Q004"
+    category: "expense_policy"
+    question: "How do I submit an expense report?"
+    expected_answer: "Submit expense reports through the finance portal within 30 days of the expense date."
+    variations:
+      - "Use finance portal to submit expenses within 30 days."
+      - "File expense reports via finance system within a month."
+    citation_required: true
+    tags: ["expenses", "portal", "process", "deadline"]
+
+  # Remote Work Policy Questions
+  - id: "Q005"
+    category: "remote_work_policy"
+    question: "What is the remote work policy?"
+    expected_answer: "Employees can work remotely up to 3 days per week with manager approval."
+    variations:
+      - "Remote work allowed 3 days weekly with manager's approval."
+      - "Up to 3 days/week remote with manager permission."
+    citation_required: true
+    tags: ["remote", "flexibility", "approval"]
+
+  - id: "Q006"
+    category: "remote_work_policy"
+    question: "Do I need manager approval for remote work?"
+    expected_answer: "Yes, remote work requires manager approval and must be scheduled in advance."
+    variations:
+      - "Manager approval required for remote work, schedule ahead."
+      - "Get manager's approval and schedule remote days in advance."
+    citation_required: true
+    tags: ["remote", "approval", "manager"]
+
+  # Time Off Policy Questions
+  - id: "Q007"
+    category: "time_off_policy"
+    question: "How do I report sick leave?"
+    expected_answer: "Notify your manager as soon as possible and log sick leave in the HR portal."
+    variations:
+      - "Tell your manager ASAP and enter sick time in HR system."
+      - "Contact manager immediately and record sick leave in portal."
+    citation_required: true
+    tags: ["sick-leave", "time-off", "notification"]
+
+  - id: "Q008"
+    category: "time_off_policy"
+    question: "Can I carry over unused vacation days?"
+    expected_answer: "You can carry over up to 5 unused vacation days to the following year."
+    variations:
+      - "Maximum 5 vacation days can roll over to next year."
+      - "Carry forward up to 5 unused vacation days annually."
+    citation_required: true
+    tags: ["vacation", "rollover", "benefits"]
+
+  # Holiday Policy Questions
+  - id: "Q009"
+    category: "holiday_policy"
+    question: "What are the company holidays?"
+    expected_answer: "The company observes 10 federal holidays plus 2 floating holidays per year."
+    variations:
+      - "10 federal holidays and 2 floating holidays annually."
+      - "Employees get 10 fixed holidays plus 2 personal floating holidays."
+    citation_required: true
+    tags: ["holidays", "time-off", "benefits"]
+
+  - id: "Q010"
+    category: "holiday_policy"
+    question: "How do floating holidays work?"
+    expected_answer: "Floating holidays can be used at your discretion with manager approval and must be scheduled in advance."
+    variations:
+      - "Use floating holidays as needed with manager OK, schedule ahead."
+      - "Manager approval required for floating holidays, book in advance."
+    citation_required: true
+    tags: ["holidays", "floating", "approval"]
+
+  # Benefits Questions
+  - id: "Q011"
+    category: "benefits"
+    question: "When am I eligible for health insurance?"
+    expected_answer: "Health insurance eligibility begins on the first day of the month following 30 days of employment."
+    variations:
+      - "Benefits start first of month after 30 days employment."
+      - "Health coverage begins 1st of month after completing 30 days."
+    citation_required: true
+    tags: ["benefits", "health", "insurance", "eligibility"]
+
+  - id: "Q012"
+    category: "benefits"
+    question: "Does the company offer 401k matching?"
+    expected_answer: "Yes, the company matches 50% of contributions up to 6% of salary."
+    variations:
+      - "Company matches half your 401k contributions up to 6% salary."
+      - "50% match on 401k up to 6% of your pay."
+    citation_required: true
+    tags: ["benefits", "retirement", "401k", "matching"]
+
+  # Training Policy Questions
+  - id: "Q013"
+    category: "training_policy"
+    question: "How do I request professional development training?"
+    expected_answer: "Submit a training request through the learning portal with manager approval and budget justification."
+    variations:
+      - "Use learning portal for training requests, need manager approval and budget."
+      - "Request training via portal with manager OK and budget explanation."
+    citation_required: true
+    tags: ["training", "professional-development", "approval"]
+
+  - id: "Q014"
+    category: "training_policy"
+    question: "What is the annual training budget?"
+    expected_answer: "Each employee has a $2,000 annual professional development budget."
+    variations:
+      - "$2,000 per year for professional development per employee."
+      - "Annual training allowance is $2,000 per person."
+    citation_required: true
+    tags: ["training", "budget", "professional-development"]
+
+  # Work Hours Questions
+  - id: "Q015"
+    category: "work_hours"
+    question: "What are the standard work hours?"
+    expected_answer: "Standard work hours are 9:00 AM to 5:00 PM Monday through Friday, with flexibility for approved schedules."
+    variations:
+      - "9-5 Monday-Friday with flexible schedule options."
+      - "Core hours 9am-5pm weekdays, flexibility available with approval."
+    citation_required: true
+    tags: ["hours", "schedule", "flexibility"]
+
+  - id: "Q016"
+    category: "work_hours"
+    question: "Can I adjust my work schedule?"
+    expected_answer: "Schedule adjustments require manager approval and must maintain 40 hours per week."
+    variations:
+      - "Manager approval needed for schedule changes, keep 40 hours weekly."
+      - "Adjust hours with manager OK, maintain 40-hour week."
+    citation_required: true
+    tags: ["hours", "schedule", "flexibility", "approval"]
+
+  # Performance Review Questions
+  - id: "Q017"
+    category: "performance_review"
+    question: "How often are performance reviews conducted?"
+    expected_answer: "Performance reviews are conducted annually in January, with mid-year check-ins in July."
+    variations:
+      - "Annual reviews in January plus July mid-year check-ins."
+      - "Yearly performance review in January, mid-year update in July."
+    citation_required: true
+    tags: ["performance", "reviews", "evaluation"]
+
+  - id: "Q018"
+    category: "performance_review"
+    question: "How are performance ratings determined?"
+    expected_answer: "Performance ratings are based on goal achievement, core competencies, and manager evaluation using a 5-point scale."
+    variations:
+      - "5-point scale rating based on goals, competencies, and manager assessment."
+      - "Manager evaluates goals and competencies on 1-5 scale for rating."
+    citation_required: true
+    tags: ["performance", "reviews", "ratings", "evaluation"]
+
+  # Onboarding Questions
+  - id: "Q019"
+    category: "onboarding"
+    question: "What happens on my first day?"
+    expected_answer: "On your first day, report to HR at 9:00 AM for orientation, equipment setup, and team introductions."
+    variations:
+      - "First day: arrive 9am HR for orientation, equipment, introductions."
+      - "Start at 9am with HR for onboarding, setup, and meeting the team."
+    citation_required: true
+    tags: ["onboarding", "first-day", "orientation"]
+
+  - id: "Q020"
+    category: "onboarding"
+    question: "How long is the probation period?"
+    expected_answer: "The probation period is 90 days from your start date."
+    variations:
+      - "90-day probation starting from first day."
+      - "Probationary period lasts 3 months from hire date."
+    citation_required: true
+    tags: ["onboarding", "probation", "employment"]
+
+# Additional questions can be added following the same format
+# Total questions: 20 (meets MVP requirement of 20+)
