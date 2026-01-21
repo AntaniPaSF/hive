@@ -45,7 +45,7 @@ A **Knowledge Manager** has a new set of compliance documents that need to be ma
 - **FR-002**: System MUST monitor a designated directory for new documents to ingest (polling).
 - **FR-003**: A manual trigger (e.g., an API endpoint) MUST be available to initiate ingestion for a specific file or directory.
 - **FR-004**: System MUST process documents to make them searchable by meaning (semantic search).
-- **FR-005**: For PDF documents, the system MUST attempt to parse structured content like tables and extract text from images (OCR).
+- **FR-005**: For PDF documents, the upstream ingestion pipeline (HR Data Pipeline) MUST parse structured content like tables and extract text from images (OCR). RAG service consumes pre-processed text chunks.
 - **FR-006**: System MUST NOT alter the factual content of the source documents during processing.
 - **FR-007**: System MUST accept natural language queries from other services.
 - **FR-008**: System MUST identify the most relevant sections of text from the ingested knowledge base that pertain to the query.
@@ -59,6 +59,9 @@ A **Knowledge Manager** has a new set of compliance documents that need to be ma
 - **FR-016**: The input interface MUST optionally allow filtering by document source.
 - **FR-017**: The output object MUST contain the answer, a list of source references, and a numerical confidence score (0.0 to 1.0).
 - **FR-018**: In an "I Don't Know" scenario, the output MUST be `{"answer": null, "citations": [], "message": "Information not found in the knowledge base."}`.
+- **FR-019**: The RAG service MUST be accessible via REST API only; a separate Web UI component (part of the orchestration layer) provides the user-facing interface.
+- **FR-020**: The service MUST emit structured JSON logs for all API calls (`/query`, `/ingest`, `/health`) including timestamp, request ID, operation type, and result status.
+- **FR-021**: The service port MUST be configurable via an environment variable (e.g., `RAG_SERVICE_PORT`) with a documented default value.
 
 ### Key Entities
 
@@ -73,7 +76,8 @@ A **Knowledge Manager** has a new set of compliance documents that need to be ma
 
 - **SC-001**: **Accuracy (Hallucination Rate)**: 0% for factual claims. System must not invent facts not present in the source text. (Test: Blind test of 50 questions).
 - **SC-002**: **Retrieval Relevance (Precision)**: For a given query, the top 3 retrieved document segments must contain the correct answer 90% of the time.
-- **SC-003**: **Performance (Latency)**: The system must return a complete answer and citations within 5 seconds for a standard query under average load.
+- **SC-003**: **Performance (Latency - RAG Service)**: The RAG service's `/query` endpoint must return a complete answer and citations within 5 seconds for a standard query under average load on CPU-only hardware.
+- **SC-004**: **Performance (Latency - End-to-End)**: The full system (including Web UI, orchestration, and RAG service) must deliver a response with p95 latency under 10 seconds.
 
 ## Dependencies & Assumptions
 
@@ -87,4 +91,12 @@ A **Knowledge Manager** has a new set of compliance documents that need to be ma
 - Q: How should the ingestion process handle PDFs that contain complex layouts, tables, or images? → A: Attempt to parse tables and use OCR to extract text from images.
 - Q: When the system says it "doesn't know" the answer, what should the output look like? → A: `answer` is `null` and `citations` is an empty array. Include a `message` field explaining why.
 - Q: How should the system behave when a query could be interpreted in multiple ways based on the source documents? → A: Return a list of possible answers, each with its own set of citations.
+
+### Session 2026-01-21 (Skeleton Alignment)
+- Q: What should the performance targets be? → A: RAG service aims for < 5 seconds internally; full system (with Web UI) targets p95 < 10 seconds end-to-end.
+- Q: Is the Web UI part of the RAG service? → A: No, the RAG service is API-only. A separate Web UI component (part of orchestration layer) wraps it.
+- Q: Where should citation enforcement happen? → A: Built into the RAG service's `/query` endpoint; no separate validation layer.
+- Q: Should the RAG service emit logs? → A: Yes, structured JSON logs with timestamp and request ID for all API calls.
+- Q: How should port configuration be handled? → A: Port must be configurable via environment variable (e.g., `RAG_SERVICE_PORT`) with documented default.
 - Q: What is the expected mechanism for this data exchange? → A: The service will periodically poll a specific file directory for new documents, and the user should be able to notify when a new document is added.
+- Q: Why confidence threshold 0.5? → A: Initial heuristic (midpoint for cosine similarity 0-1 range). Will be tuned during Phase 2.10 integration testing with real data to maximize precision while maintaining >80% answer coverage (SC-002).
