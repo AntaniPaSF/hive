@@ -357,6 +357,11 @@ Create `data/schema.json` documenting structure for RAG Engineer:
   },
   "embedding_model": "all-MiniLM-L6-v2",
   "embedding_dimensions": 384,
-  "similarity_metric": "cosine"
+  "similarity_metric": "cosine",
+  "rag_integration_notes": {
+    "citation_format": "metadata.source_doc and metadata.section_title provide citation data",
+    "retrieval_query": "Use embedding vector for semantic search with cosine similarity",
+    "context_assembly": "metadata.chunk_index enables sequential chunk retrieval for context expansion"
+  }
 }
 ```
