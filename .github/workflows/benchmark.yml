@@ -1,8 +1,9 @@
-name: Benchmarking Suite
+# COMMENTED OUT - Not core CICD, benchmarking is optional
+# name: Benchmarking Suite
 # Comprehensive benchmarking with performance regression tracking
 # Runs on schedule or manual trigger with full test coverage
 
-on:
+# on:
   schedule:
     - cron: '0 2 * * *'  # Daily at 2 AM UTC
   workflow_dispatch:

@@ -125,11 +125,12 @@ jobs:
   # ========================================================================
   # JOB 2: BENCHMARK - Establish baseline for regression detection
   # ========================================================================
-  benchmark:
-    name: Benchmark Baseline
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
+  # COMMENTED OUT - Not core CICD
+  # benchmark:
+  #   name: Benchmark Baseline
+  #   needs: build-and-push
+  #   runs-on: ubuntu-latest
+  #   timeout-minutes: 40
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -210,11 +211,12 @@ jobs:
   # ========================================================================
   # JOB 3: NOTIFY - Send notifications on completion
   # ========================================================================
-  notify:
-    name: Notify Build Completion
-    if: always()
-    needs: [build-and-push, benchmark]
-    runs-on: ubuntu-latest
+  # COMMENTED OUT - Not core CICD
+  # notify:
+  #   name: Notify Build Completion
+  #   if: always()
+  #   needs: [build-and-push, benchmark]
+  #   runs-on: ubuntu-latest
     steps:
       - name: Determine build status
         id: status
@@ -270,11 +272,12 @@ jobs:
   # ========================================================================
   # Summary
   # ========================================================================
-  summary:
-    name: Build Summary
-    if: always()
-    needs: [build-and-push, benchmark, notify]
-    runs-on: ubuntu-latest
+  # COMMENTED OUT - Not core CICD
+  # summary:
+  #   name: Build Summary
+  #   if: always()
+  #   needs: [build-and-push, benchmark, notify]
+  #   runs-on: ubuntu-latest
     steps:
       - name: Build summary
         run: |

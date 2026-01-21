@@ -1,7 +1,8 @@
-name: Release
+# COMMENTED OUT - Not core CICD, releases can be done manually
+# name: Release
 # Creates semantic releases with changelog and GitHub releases
 
-on:
+# on:
   push:
     tags:
       - 'v*.*.*'

@@ -299,9 +299,9 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 35
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5

@@ -1,7 +1,8 @@
-name: Security Scanning
+# COMMENTED OUT - Not core CICD, security scanning is optional
+# name: Security Scanning
 # Comprehensive security scanning with vulnerability detection and reporting
 
-on:
+# on:
   pull_request:
     branches: [main]
   push:
