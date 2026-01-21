@@ -1,3 +1,7 @@
+# Vector database storage (persistent data, not source)
+vectordb_storage/
+*.sqlite3
+
 # Python
 __pycache__/
 *.py[cod]
@@ -16,6 +20,8 @@ parts/
 sdist/
 var/
 wheels/
+pip-wheel-metadata/
+share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
@@ -47,6 +53,9 @@ results/*.txt
 .env
 .env.local
 
+# Docker
+.dockerignore
+
 # Test artifacts
 .pytest_cache/
 .coverage
@@ -54,3 +63,6 @@ htmlcov/
 
 # Logs
 *.log
+
+# Distribution artifacts
+dist/
