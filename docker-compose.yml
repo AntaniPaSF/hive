@@ -1,0 +1,16 @@
+services:
+  app:
+    build: .
+    image: hive-assistant:local
+    container_name: hive-assistant-app
+    environment:
+      - APP_PORT=${APP_PORT}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:${INTERNAL_PORT:-8000}/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    volumes:
+      - ./:/workspace:ro
