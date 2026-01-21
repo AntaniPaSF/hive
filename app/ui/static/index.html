@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Corporate Digital Assistant (Local MVP)</title>
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            margin: 2rem;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        textarea,
+        input {
+            width: 100%;
+            padding: 0.75rem;
+            margin: 0.5rem 0;
+        }
+
+        button {
+            padding: 0.6rem 1rem;
+        }
+
+        .note {
+            color: #555;
+            font-size: 0.9rem;
+        }
+
+        .error {
+            color: #b00020;
+        }
+
+        .ok {
+            color: #006400;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Corporate Digital Assistant</h1>
+        <p class="note">This MVP enforces citations for every answer. Provide a citation to test, or use the demo.</p>
+
+        <label>Prompt</label>
+        <textarea id="prompt" rows="4" placeholder="Ask a question..."></textarea>
+
+        <label>Cititations JSON (e.g., [{"doc":"sample-policies.md","section":"Vacation Policy §1"}])</label>
+        <input id="citations" value="[{\" doc\":\"sample-policies.md\",\"section\":\"Vacation Policy §1\"}]" />
+
+        <button id="send">Ask</button>
+        <button id="demo">Load Demo</button>
+
+        <pre id="out"></pre>
+    </div>
+
+    <script>
+        async function postAsk() {
+            const prompt = document.getElementById('prompt').value.trim();
+            let citations = [];
+            try { citations = JSON.parse(document.getElementById('citations').value); } catch (e) { }
+            const res = await fetch('/ask', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt, citations })
+            });
+            const out = document.getElementById('out');
+            const data = await res.json();
+            out.textContent = JSON.stringify(data, null, 2);
+            out.className = res.ok ? 'ok' : 'error';
+        }
+
+        async function loadDemo() {
+            const res = await fetch('/demo');
+            const out = document.getElementById('out');
+            const data = await res.json();
+            out.textContent = JSON.stringify(data, null, 2);
+            out.className = 'ok';
+        }
+
+        document.getElementById('send').addEventListener('click', postAsk);
+        document.getElementById('demo').addEventListener('click', loadDemo);
+    </script>
+</body>
+
+</html>
