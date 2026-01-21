@@ -9,6 +9,25 @@
 
 ---
 
+## 0. Single-Command Execution (Fastest - 3 minutes) ✨
+
+**NEW**: Use the wrapper script for automatic setup:
+
+```bash
+cd /path/to/hive
+./scripts/benchmark.sh --api-url http://localhost:8080
+```
+
+**What this does**:
+- ✓ Auto-creates virtual environment if missing
+- ✓ Auto-installs dependencies
+- ✓ Runs benchmark with your API
+- ✓ Generates results in CLI + JSON
+
+Skip to Step 4 for results! Or continue below for manual setup.
+
+---
+
 ## 1. Install Dependencies (2 minutes)
 
 ```bash
