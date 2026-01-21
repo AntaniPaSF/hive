@@ -155,24 +155,208 @@ A data engineer needs to track changes to the knowledge base over time, includin
 ## Dependencies
 
 - Git repository must be initialized and accessible for version control
-- Python environment with package installation capabilities
-- PDF parsing library (e.g., PyPDF2, pdfplumber) for text extraction
-- Vector database (ChromaDB or Qdrant) installation and setup
-- Embedding model library (e.g., sentence-transformers) for semantic similarity calculations
-- Kaggle API access for dataset retrieval (requires API key)
-- HuggingFace datasets library for document retrieval
-- Sufficient disk space for `/data` folder and vector database storage
+- Docker and Docker Compose for containerized deployment (following existing project pattern)
+- Python 3.11+ environment (provided by Dockerfile)
+- Python packages to add to `requirements.txt`:
+  - `PyPDF2==3.0.1` - PDF text extraction
+  - `chromadb==0.4.22` - Vector database (local, no external service)
+  - `sentence-transformers==2.2.2` - Embedding generation
+  - `kaggle==1.5.16` - Kaggle dataset API
+  - `huggingface-hub==0.20.2` - HuggingFace dataset access
+  - `datasets==2.16.1` - HuggingFace datasets library
+- Kaggle API credentials (API key) for external data sourcing
+- HuggingFace account (optional, for private datasets)
+- Sufficient disk space for `/data` folder and vector database storage (Docker volume)
 
 ## Out of Scope
 
 - Generating synthetic HR policy documents (focus on real data only)
 - Real-time document ingestion or monitoring of external sources
-- User interface for document upload or management
-- Document access controls or permission management
+- User interface for document upload or management (may be added later)
+- Document access controls or permission management (localhost-only per constitution)
 - Multi-language translation or support
 - OCR for scanned document images
 - Custom embedding model training or fine-tuning
 - Cloud deployment or distributed vector database setup
 - Query interface or RAG application (handled by RAG Engineer)
 - Document classification or automatic tagging
-- Duplicate detection across semantically similar documents
+
+## Implementation Architecture
+
+### Directory Structure
+
+Following the existing `app/` pattern established by the project skeleton:
+
+```
+app/
+├── core/
+│   ├── citations.py       # Existing: Citation enforcement
+│   ├── config.py          # Existing: Environment config - EXTEND with pipeline settings
+│   └── __init__.py
+├── data/
+│   └── seed/              # Existing: Demo policies
+├── ingestion/             # NEW: Data pipeline code
+│   ├── __init__.py
+│   ├── pdf_parser.py      # PDF text extraction
+│   ├── chunker.py         # Document chunking logic
+│   ├── embeddings.py      # Embedding generation
+│   ├── validator.py       # Contradiction/duplicate detection
+│   └── cli.py             # CLI interface for ingestion
+├── vectordb/              # NEW: Vector database wrapper
+│   ├── __init__.py
+│   ├── client.py          # ChromaDB client wrapper
+│   └── models.py          # Data models for chunks/metadata
+├── server.py              # Existing: HTTP server - RAG Engineer will integrate
+└── ui/
+    └── static/            # Existing: UI files
+
+data/                      # NEW: Actual HR documents (git-tracked)
+├── README.md              # Existing: Usage guide
+├── manifest.json          # NEW: Ingestion tracking
+├── pdf/                   # Authoritative PDF source
+│   └── [your-hr-policy.pdf]
+├── kaggle/                # External augmentation
+└── huggingface/           # External augmentation
+
+vectordb_storage/          # NEW: Vector DB persistence (Docker volume, not git-tracked)
+└── chroma.sqlite3         # ChromaDB storage
+
+scripts/
+├── setup.sh               # Existing: Docker build
+├── start.sh               # Existing: Docker run
+├── verify.sh              # Existing: Health checks
+├── package.sh             # Existing: Distribution
+└── ingest.sh              # NEW: Wrapper for ingestion CLI
+```
+
+### Technology Stack
+
+- **Language**: Python 3.11+ (from existing Dockerfile)
+- **PDF Parsing**: PyPDF2 3.0.1
+- **Vector Database**: ChromaDB 0.4.22 (local, no external service - aligns with Self-Contained principle)
+- **Embeddings**: sentence-transformers with `all-MiniLM-L6-v2` model (384 dimensions, CPU-friendly)
+- **External Data**: Kaggle API 1.5.16, HuggingFace Hub 0.20.2
+- **Containerization**: Docker + Docker Compose (existing pattern)
+
+### Configuration
+
+Extend existing `app/core/config.py` pattern with environment variables:
+
+```python
+@dataclass
+class AppConfig:
+    # Existing
+    app_port: int = int(os.environ.get("APP_PORT", "0"))
+    
+    # NEW: Data Pipeline Configuration
+    vector_db_type: str = os.environ.get("VECTOR_DB_TYPE", "chromadb")
+    vector_db_path: str = os.environ.get("VECTOR_DB_PATH", "/app/vectordb_storage")
+    embedding_model: str = os.environ.get("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
+    chunk_size: int = int(os.environ.get("CHUNK_SIZE", "512"))
+    chunk_overlap: int = int(os.environ.get("CHUNK_OVERLAP", "50"))
+    similarity_threshold_relevance: float = float(os.environ.get("SIMILARITY_THRESHOLD_RELEVANCE", "0.75"))
+    similarity_threshold_duplicate: float = float(os.environ.get("SIMILARITY_THRESHOLD_DUPLICATE", "0.85"))
+```
+
+Environment variables (via `.env` or `docker-compose.yml`):
+- `VECTOR_DB_TYPE`: chromadb (default)
+- `VECTOR_DB_PATH`: /app/vectordb_storage
+- `EMBEDDING_MODEL`: all-MiniLM-L6-v2
+- `CHUNK_SIZE`: 512
+- `CHUNK_OVERLAP`: 50
+- `SIMILARITY_THRESHOLD_RELEVANCE`: 0.75
+- `SIMILARITY_THRESHOLD_DUPLICATE`: 0.85
+
+### CLI Interface
+
+Create `scripts/ingest.sh` wrapper:
+
+```bash
+#!/usr/bin/env bash
+# Wrapper for data ingestion using docker compose
+
+docker compose run --rm app python -m app.ingestion.cli "$@"
+```
+
+Usage examples:
+```bash
+# Ingest all documents from data/ folder
+bash scripts/ingest.sh --all
+
+# Ingest specific source
+bash scripts/ingest.sh --source pdf
+bash scripts/ingest.sh --source kaggle
+bash scripts/ingest.sh --source huggingface
+
+# Rebuild vector database from scratch
+bash scripts/ingest.sh --rebuild
+
+# Validate without ingesting
+bash scripts/ingest.sh --validate-only
+```
+
+### Data Storage
+
+- **Source Documents**: `data/{pdf,kaggle,huggingface}/` (git-tracked for reproducibility)
+- **Vector Database**: Docker volume `vectordb_data` mounted at `/app/vectordb_storage` (persistent, not git-tracked)
+- **Manifest**: `data/manifest.json` (git-tracked, records ingestion metadata)
+
+Update `docker-compose.yml`:
+```yaml
+volumes:
+  vectordb_data:
+
+services:
+  app:
+    volumes:
+      - ./data:/app/data
+      - vectordb_data:/app/vectordb_storage
+```
+
+### Integration Points
+
+1. **Citation System** (`app/core/citations.py`):
+   - Chunks generate metadata compatible with citation format: `{doc: "filename.pdf", section: "§1.2"}`
+   - Each chunk stores: source document, page number, section title for citation generation
+
+2. **Config Pattern** (`app/core/config.py`):
+   - Extends existing config dataclass with pipeline settings
+   - Follows environment-only configuration (no hardcoded defaults per FR-017)
+
+3. **Logging**:
+   - Uses structured JSON logging pattern from `app/server.py`
+   - Logs ingestion operations with timestamps, request IDs, validation results
+
+4. **Health Checks**:
+   - Add vector database health check to verify storage is accessible
+   - Extend `/health` endpoint to include vectordb status
+
+### Data Schema Export (FR-015)
+
+Create `data/schema.json` documenting structure for RAG Engineer:
+
+```json
+{
+  "chunk": {
+    "id": "string (UUID)",
+    "text": "string (chunk content)",
+    "embedding": "array[float] (384 dimensions)",
+    "metadata": {
+      "source_doc": "string (filename)",
+      "source_type": "string (pdf|kaggle|huggingface)",
+      "page_number": "integer",
+      "section_title": "string",
+      "chunk_index": "integer",
+      "timestamp": "string (ISO 8601)",
+      "related_topic": "string",
+      "validation_status": {
+        "contradiction_check": "boolean",
+        "duplicate_check": "boolean"
+      }
+    }
+  },
+  "embedding_model": "all-MiniLM-L6-v2",
+  "embedding_dimensions": 384,
+  "similarity_metric": "cosine"
+}
+```
