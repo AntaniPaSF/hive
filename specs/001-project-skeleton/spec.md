@@ -3,7 +3,7 @@
 **Feature Branch**: `001-project-skeleton`  
 **Created**: 2026-01-21  
 **Status**: Draft  
-**Input**: User description: "Prepare state of the art skeleton of the project. Appropriate folder structure should be implemented. All of the minimum required build scripts to prepare project dependancies. All prepared tools package and dev container. Consider integration activities for packaging and deploying the Corporate Digital Assistant to localhost. Everthing should be self contained and this repo should be build from local enviroments."
+**Input**: User description: "Prepare state of the art skeleton of the project. Appropriate folder structure should be implemented. All of the minimum required build scripts to prepare project dependencies. All prepared tools package and dev container. Consider integration activities for packaging and deploying the Corporate Digital Assistant to localhost. Everything should be self contained and this repo should be build from local environments."
 
 ## Clarifications
 
