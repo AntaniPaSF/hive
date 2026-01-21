@@ -25,30 +25,41 @@ share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
 # Virtual environments
+.venv/
 venv/
 ENV/
 env/
-.venv
 
-# IDE
+# IDEs
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# OS
+# OS files
 .DS_Store
 Thumbs.db
 
-# Environment variables
+# Benchmark results (keep .gitkeep for directory tracking)
+results/*.json
+results/*.txt
+!results/.gitkeep
+
+# Environment files
 .env
 .env.local
 
 # Docker
 .dockerignore
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
 
 # Logs
 *.log
