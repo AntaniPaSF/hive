@@ -1,0 +1,146 @@
+# Contract: Main Build & Release Workflow
+
+## Metadata
+name: "Main Build"
+phase: "Phase 4 Implementation"
+description: "Builds and releases production images on main branch pushes"
+trigger_events:
+  - push: "branches: [main]"
+  - workflow_dispatch: "manual trigger"
+
+---
+
+## Inputs
+
+```yaml
+github.event.push:
+  ref: "refs/heads/main"
+  before: string                # Previous commit SHA
+  after: string                 # Current commit SHA
+  commits: [object]             # Changed files info
+  
+github.event.workflow_dispatch:  # Manual trigger
+  # Optional inputs can be defined
+  inputs: {}
+```
+
+---
+
+## Jobs
+
+### Job: BuildAndPush
+**Runs On**: ubuntu-latest
+**Timeout**: 25 minutes
+
+**Purpose**: Build image for main branch with semantic versioning + latest tag
+
+**Steps**:
+
+1. **Generate tags** (different from PR workflow)
+   ```bash
+   COMMIT_SHA=$(git rev-parse --short HEAD)
+   TIMESTAMP=$(date +%s)
+   
+   # For main branch, use 'main-{sha}' and 'latest'
+   MAIN_TAG="main-${COMMIT_SHA}"
+   LATEST_TAG="latest"
+   
+   FULL_IMAGE_MAIN="ghcr.io/org/hive-core:${MAIN_TAG}"
+   FULL_IMAGE_LATEST="ghcr.io/org/hive-core:${LATEST_TAG}"
+   
+   echo "FULL_IMAGE_MAIN=${FULL_IMAGE_MAIN}" >> $GITHUB_ENV
+   echo "FULL_IMAGE_LATEST=${FULL_IMAGE_LATEST}" >> $GITHUB_ENV
+   ```
+
+2. **Build, push, and scan** (identical to PR workflow, but with 'latest' tag)
+   ```yaml
+   - uses: docker/build-push-action@v5
+     with:
+       context: .
+       push: true
+       tags: |
+         ${{ env.FULL_IMAGE_MAIN }}
+         ${{ env.FULL_IMAGE_LATEST }}
+       cache-from: type=gha
+       cache-to: type=gha,mode=max
+   ```
+
+3. **Trivy scan (blocking)**
+   ```bash
+   docker run --rm aquasec/trivy image \
+     --severity CRITICAL,HIGH \
+     --exit-code 1 \
+     ${{ env.FULL_IMAGE_MAIN }}
+   ```
+
+**Output**:
+```yaml
+Build:
+  image_name: "ghcr.io/org/hive-core:main-abc1234"
+  tags:
+    - commit_sha: "main-abc1234567890"
+    - latest: true
+  push_status: "pushed"
+  scan_status: "clean"
+```
+
+---
+
+### Job: Benchmark (conditional)
+**Depends On**: `build-and-push`
+
+**Purpose**: Run full benchmark suite on main branch (baseline for future PRs)
+
+**Steps**:
+1. Pull main-branch image
+2. Spin up API
+3. Run full benchmark suite
+4. Store results as baseline (for regression detection in PRs)
+
+**Output**:
+```yaml
+BenchmarkRun:
+  baseline_accuracy: 86.2%
+  full_report: stored for PR comparisons
+```
+
+---
+
+### Job: Notify (always runs)
+**Runs After**: benchmark
+
+**Purpose**: Notify on success/failure
+
+**Steps** (if success):
+```bash
+curl -X POST ${{ secrets.SLACK_WEBHOOK }} \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "✅ Main build successful",
+    "blocks": [
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "*Main Build Succeeded*\nImage: ghcr.io/org/hive-core:main-abc1234\nBenchmark: 86.2% accuracy"
+        }
+      }
+    ]
+  }'
+```
+
+**Steps** (if failure):
+```bash
+curl -X POST ${{ secrets.SLACK_WEBHOOK }} \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "❌ Main build failed",
+    "blocks": [...]
+  }'
+```
+
+---
+
+## Related Contracts
+- [workflow-pr-validation.yaml](workflow-pr-validation.yaml)
+- [data-model.md](../data-model.md)
