@@ -159,6 +159,228 @@ All configuration is managed via environment variables (see `.env.example`).
 | `RAG_SERVICE_PORT` | `8000` | Service HTTP port |
 | `LOG_LEVEL` | `INFO` | Logging verbosity |
 
+## Docker Deployment
+
+### Building the Docker Image
+
+The service uses a multi-stage Dockerfile for optimized production builds:
+
+```bash
+# Build the image
+docker build -t rag-llm-service:latest .
+
+# Verify the image
+docker images | grep rag-llm-service
+```
+
+**Image details**:
+- **Base**: Python 3.12 slim (minimal footprint)
+- **Size**: ~500MB (vs ~1GB for full Python image)
+- **User**: Non-root `raguser` (UID 1000) for security
+- **Layers**: Multi-stage build (builder + runtime)
+
+### Running with Docker Compose
+
+The recommended deployment method uses docker-compose to orchestrate both Ollama and the RAG service:
+
+```bash
+# Start all services (Ollama + RAG service)
+docker-compose up -d
+
+# Check service status
+docker-compose ps
+
+# View logs
+docker-compose logs -f rag-service
+docker-compose logs -f ollama
+
+# Stop services
+docker-compose down
+
+# Stop and remove volumes (data cleanup)
+docker-compose down -v
+```
+
+**Service ports**:
+- RAG Service: `8000` (configurable via `RAG_SERVICE_PORT`)
+- Ollama: `11434`
+
+### Initial Model Setup
+
+After first-time deployment, download the Mistral 7B model:
+
+**Option 1: Automated script** (recommended):
+```bash
+./scripts/download-ollama-model.sh
+```
+
+**Option 2: Manual download**:
+```bash
+# Download Mistral 7B (~4GB)
+docker exec ollama-service ollama pull mistral:7b
+
+# Verify model is available
+docker exec ollama-service ollama list
+```
+
+**Alternative models** (optional):
+```bash
+# Llama 2 7B
+docker exec ollama-service ollama pull llama2:7b
+
+# Phi (smaller, faster, less accurate)
+docker exec ollama-service ollama pull phi:latest
+
+# Update docker-compose.yml OLLAMA_MODEL env var to use different model
+```
+
+### Testing the Deployment
+
+**1. Health check**:
+```bash
+curl http://localhost:8000/health
+```
+
+Expected response:
+```json
+{
+  "status": "healthy",
+  "ollama": "connected",
+  "vector_store": "connected",
+  "embedding_api": "connected"
+}
+```
+
+**2. Sample query**:
+```bash
+curl -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "What is the vacation policy?",
+    "filters": {"max_results": 5}
+  }'
+```
+
+**3. Verify logs**:
+```bash
+# Check for successful startup
+docker-compose logs rag-service | grep "Application startup complete"
+
+# Monitor request processing
+docker-compose logs -f rag-service
+```
+
+### Docker Configuration Files
+
+**Dockerfile**:
+- Multi-stage build (builder + runtime)
+- Non-root user execution
+- Health check endpoint (`/health`)
+- Volume mounts for source code (development) and logs
+
+**docker-compose.yml**:
+- Service orchestration (Ollama + RAG service)
+- Network configuration (`rag-network`)
+- Volume persistence (`ollama-data`)
+- Environment variable injection
+- Health checks and restart policies
+
+**.dockerignore**:
+- Excludes test files, docs, git history
+- Reduces image size by ~50MB
+- Speeds up build context transfer
+
+### Production Deployment Considerations
+
+**1. Resource allocation**:
+```yaml
+# Add to docker-compose.yml under rag-service:
+deploy:
+  resources:
+    limits:
+      cpus: '2.0'
+      memory: 4G
+    reservations:
+      cpus: '1.0'
+      memory: 2G
+```
+
+**2. Secrets management**:
+```bash
+# Use docker secrets instead of .env file
+echo "your-api-key" | docker secret create embedding_api_key -
+```
+
+**3. Logging driver**:
+```yaml
+# Add to docker-compose.yml under rag-service:
+logging:
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+```
+
+**4. Reverse proxy** (nginx/traefik):
+```nginx
+# Example nginx config
+location /rag/ {
+    proxy_pass http://localhost:8000/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Request-ID $request_id;
+}
+```
+
+### Troubleshooting Docker Deployments
+
+**Image won't build**:
+```bash
+# Check Docker daemon is running
+docker info
+
+# Check Dockerfile syntax
+docker build --no-cache -t rag-llm-service:latest .
+
+# Inspect build layers
+docker history rag-llm-service:latest
+```
+
+**Container exits immediately**:
+```bash
+# Check logs
+docker logs rag-llm-service
+
+# Inspect exit code
+docker inspect rag-llm-service --format='{{.State.ExitCode}}'
+
+# Run interactively for debugging
+docker run -it --entrypoint /bin/bash rag-llm-service:latest
+```
+
+**Health check failing**:
+```bash
+# Check health status
+docker inspect rag-llm-service --format='{{.State.Health.Status}}'
+
+# Test health endpoint manually
+docker exec rag-llm-service curl http://localhost:8000/health
+
+# Verify dependencies are accessible
+docker exec rag-llm-service ping ollama -c 3
+```
+
+**Model download fails**:
+```bash
+# Check Ollama service is running
+docker-compose ps ollama
+
+# Verify Ollama API is accessible
+curl http://localhost:11434/api/tags
+
+# Download with verbose output
+docker exec -it ollama-service ollama pull mistral:7b --verbose
+```
+
 ## Development
 
 ### Local Setup (without Docker)

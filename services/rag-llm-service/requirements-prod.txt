@@ -1,0 +1,23 @@
+# RAG LLM Service - Production Dependencies Only
+# Python 3.12+ required
+
+# Core Framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# LLM & Orchestration
+langchain==0.1.4
+langchain-community==0.0.16
+ollama==0.1.6
+
+# HTTP Client & Requests
+httpx>=0.25.2,<0.26.0
+requests==2.31.0
+
+# Logging
+python-json-logger==2.0.7
+
+# Vector Operations
+numpy==1.26.3

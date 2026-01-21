@@ -1,0 +1,163 @@
+{
+    "description": "Sample queries for RAG LLM Service testing and demonstration",
+    "version": "1.0",
+    "queries": [
+        {
+            "id": 1,
+            "question": "What are the safety protocols for handling chemicals?",
+            "filters": {
+                "source": "safety_manual.pdf",
+                "max_results": 5
+            },
+            "expected_topics": [
+                "chemical safety",
+                "protective equipment",
+                "handling procedures"
+            ],
+            "min_confidence": 0.7,
+            "notes": "Tests retrieval from safety documentation"
+        },
+        {
+            "id": 2,
+            "question": "How many days of vacation do employees receive per year?",
+            "filters": {
+                "source": "hr_policy.pdf",
+                "max_results": 3
+            },
+            "expected_topics": [
+                "vacation policy",
+                "paid time off",
+                "annual leave"
+            ],
+            "min_confidence": 0.8,
+            "notes": "Tests specific numerical fact retrieval"
+        },
+        {
+            "id": 3,
+            "question": "What is the process for requesting parental leave?",
+            "filters": {
+                "max_results": 5
+            },
+            "expected_topics": [
+                "parental leave",
+                "leave request",
+                "HR procedures"
+            ],
+            "min_confidence": 0.6,
+            "notes": "Tests multi-step process retrieval"
+        },
+        {
+            "id": 4,
+            "question": "What health insurance benefits are available to employees?",
+            "filters": {
+                "source": "benefits_guide.pdf",
+                "max_results": 5
+            },
+            "expected_topics": [
+                "health insurance",
+                "medical benefits",
+                "coverage"
+            ],
+            "min_confidence": 0.7,
+            "notes": "Tests benefits documentation retrieval"
+        },
+        {
+            "id": 5,
+            "question": "What are the requirements for remote work eligibility?",
+            "filters": {
+                "max_results": 5
+            },
+            "expected_topics": [
+                "remote work",
+                "work from home",
+                "eligibility"
+            ],
+            "min_confidence": 0.6,
+            "notes": "Tests policy retrieval for remote work"
+        },
+        {
+            "id": 6,
+            "question": "What is the company's policy on professional development and training?",
+            "filters": {
+                "source": "employee_handbook.pdf",
+                "max_results": 5
+            },
+            "expected_topics": [
+                "professional development",
+                "training",
+                "education"
+            ],
+            "min_confidence": 0.65,
+            "notes": "Tests handbook retrieval for development policies"
+        },
+        {
+            "id": 7,
+            "question": "How do I report a workplace safety incident?",
+            "filters": {
+                "source": "safety_manual.pdf",
+                "max_results": 5
+            },
+            "expected_topics": [
+                "incident reporting",
+                "safety procedures",
+                "workplace safety"
+            ],
+            "min_confidence": 0.75,
+            "notes": "Tests procedural information retrieval"
+        },
+        {
+            "id": 8,
+            "question": "What are the performance review procedures and timelines?",
+            "filters": {
+                "source": "hr_policy.pdf",
+                "max_results": 5
+            },
+            "expected_topics": [
+                "performance review",
+                "evaluation",
+                "annual review"
+            ],
+            "min_confidence": 0.7,
+            "notes": "Tests HR process documentation"
+        },
+        {
+            "id": 9,
+            "question": "What is the dress code policy for office employees?",
+            "filters": {
+                "max_results": 3
+            },
+            "expected_topics": [
+                "dress code",
+                "workplace attire",
+                "professional appearance"
+            ],
+            "min_confidence": 0.6,
+            "notes": "Tests workplace policy retrieval"
+        },
+        {
+            "id": 10,
+            "question": "What is the capital of France?",
+            "filters": {
+                "max_results": 5
+            },
+            "expected_behavior": "low_confidence",
+            "expected_answer": null,
+            "notes": "Negative test: question outside knowledge base should return 'I don't know'"
+        }
+    ],
+    "usage_instructions": {
+        "manual_testing": "Use these queries to manually test the /query endpoint. Each query includes expected behavior and topics to verify.",
+        "automated_testing": "Import this file in integration tests to run standardized query validation.",
+        "demo_purposes": "Use queries 1-9 to demonstrate the RAG service capabilities. Query 10 demonstrates proper 'I don't know' handling.",
+        "performance_testing": "Run all queries in sequence to measure average response times and validate consistency."
+    },
+    "validation_criteria": {
+        "confidence_threshold": 0.5,
+        "expected_response_time_ms": 5000,
+        "citation_requirements": {
+            "must_include_document": true,
+            "must_include_section_or_page": true,
+            "min_citations_per_answer": 1
+        }
+    }
+}

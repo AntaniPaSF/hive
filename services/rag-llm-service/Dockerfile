@@ -1,32 +1,7 @@
-# Multi-stage Dockerfile for RAG LLM Service
+# Dockerfile for RAG LLM Service
 # Base: Python 3.12 slim image
 # Target: Production-ready service with minimal footprint
 
-# ============================================
-# Stage 1: Builder - Install dependencies
-# ============================================
-FROM python:3.12-slim as builder
-
-WORKDIR /build
-
-# Install system dependencies for building Python packages
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    g++ \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy dependency files
-COPY requirements.txt .
-
-# Install Python dependencies to a virtual environment
-RUN python -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
-
-# ============================================
-# Stage 2: Runtime - Minimal production image
-# ============================================
 FROM python:3.12-slim
 
 WORKDIR /app
@@ -35,16 +10,16 @@ WORKDIR /app
 RUN useradd -m -u 1000 raguser && \
     chown -R raguser:raguser /app
 
-# Copy virtual environment from builder
-COPY --from=builder /opt/venv /opt/venv
+# Copy and install dependencies
+COPY requirements-prod.txt .
+RUN --network=default pip install --no-cache-dir -r requirements-prod.txt
 
 # Copy application code
 COPY --chown=raguser:raguser src/ ./src/
 COPY --chown=raguser:raguser pyproject.toml ./
 
 # Set environment variables
-ENV PATH="/opt/venv/bin:$PATH" \
-    PYTHONUNBUFFERED=1 \
+ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app
 
