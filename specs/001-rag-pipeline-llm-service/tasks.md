@@ -24,13 +24,13 @@ Tasks are organized by **implementation phase** and **user story**, enabling ind
 
 **Goal**: Set up project structure, Docker environment, and development dependencies.
 
-- [ ] T001 Create project directory structure per plan.md (`services/rag-llm-service/src/`, `services/rag-llm-service/tests/`, etc.)
-- [ ] T002 Create `services/rag-llm-service/requirements.txt` with pinned dependencies (Python 3.12+, pydantic, langchain, ollama, requests, pytest, python-json-logger)
-- [ ] T003 Create `services/rag-llm-service/pyproject.toml` with project metadata (name, version, description, entry points)
-- [ ] T004 Create `services/rag-llm-service/Dockerfile` with multi-stage build (base Python 3.12 image, install dependencies, run service)
-- [ ] T005 Create `services/rag-llm-service/docker-compose.yml` defining Ollama service (image: ollama/ollama, port 11434) and RAG service (build context, environment variables, volumes)
-- [ ] T006 Create `services/rag-llm-service/.env.example` with all environment variables (OLLAMA_HOST, VECTOR_STORE_URL, VECTOR_STORE_COLLECTION, EMBEDDING_MODEL, MIN_CONFIDENCE_THRESHOLD, LOG_LEVEL, RAG_SERVICE_PORT)
-- [ ] T007 Create `services/rag-llm-service/README.md` with setup instructions, API overview, environment configuration, and troubleshooting guide
+- [X] T001 Create project directory structure per plan.md (`services/rag-llm-service/src/`, `services/rag-llm-service/tests/`, etc.)
+- [X] T002 Create `services/rag-llm-service/requirements.txt` with pinned dependencies (Python 3.12+, pydantic, langchain, ollama, requests, pytest, python-json-logger)
+- [X] T003 Create `services/rag-llm-service/pyproject.toml` with project metadata (name, version, description, entry points)
+- [X] T004 Create `services/rag-llm-service/Dockerfile` with multi-stage build (base Python 3.12 image, install dependencies, run service)
+- [X] T005 Create `services/rag-llm-service/docker-compose.yml` defining Ollama service (image: ollama/ollama, port 11434) and RAG service (build context, environment variables, volumes)
+- [X] T006 Create `services/rag-llm-service/.env.example` with all environment variables (OLLAMA_HOST, VECTOR_STORE_URL, VECTOR_STORE_COLLECTION, EMBEDDING_MODEL, MIN_CONFIDENCE_THRESHOLD, LOG_LEVEL, RAG_SERVICE_PORT)
+- [X] T007 Create `services/rag-llm-service/README.md` with setup instructions, API overview, environment configuration, and troubleshooting guide
 
 **Deliverable**: Project structure ready for implementation; all build artifacts defined
 
@@ -40,12 +40,12 @@ Tasks are organized by **implementation phase** and **user story**, enabling ind
 
 **Goal**: Implement foundational data models and utility functions required by all services.
 
-- [ ] T008 Implement `services/rag-llm-service/src/schemas/query.py` with Pydantic models: `Query` (question + optional filters), `Answer` (answer + citations + confidence + message), `Citation` (document_name + excerpt + page_number + section + chunk_id)
-- [ ] T009 Implement `services/rag-llm-service/src/schemas/citation.py` with citation rendering logic (format citations as `[source_doc, section_title]` or with page number)
-- [ ] T010 Implement `services/rag-llm-service/src/utils/logger.py` with structured JSON logging (timestamp, request_id, level, component, event, data, error)
-- [ ] T011 Implement `services/rag-llm-service/src/utils/errors.py` with custom exception classes (VectorStoreUnavailable, OllamaUnavailable, NoCitationsFound, InvalidQuery, GenerationTimeout)
-- [ ] T012 Implement `services/rag-llm-service/src/utils/validators.py` with input validation (question length 3-1000 chars, filter validation)
-- [ ] T013 Implement `services/rag-llm-service/src/config.py` reading environment variables (OLLAMA_HOST, VECTOR_STORE_URL, VECTOR_STORE_COLLECTION, EMBEDDING_MODEL, MIN_CONFIDENCE_THRESHOLD, LOG_LEVEL, RAG_SERVICE_PORT)
+- [X] T008 Implement `services/rag-llm-service/src/schemas/query.py` with Pydantic models: `Query` (question + optional filters), `Answer` (answer + citations + confidence + message), `Citation` (document_name + excerpt + page_number + section + chunk_id)
+- [X] T009 Implement `services/rag-llm-service/src/schemas/citation.py` with citation rendering logic (format citations as `[source_doc, section_title]` or with page number)
+- [X] T010 Implement `services/rag-llm-service/src/utils/logger.py` with structured JSON logging (timestamp, request_id, level, component, event, data, error)
+- [X] T011 Implement `services/rag-llm-service/src/utils/errors.py` with custom exception classes (VectorStoreUnavailable, OllamaUnavailable, NoCitationsFound, InvalidQuery, GenerationTimeout)
+- [X] T012 Implement `services/rag-llm-service/src/utils/validators.py` with input validation (question length 3-1000 chars, filter validation)
+- [X] T013 Implement `services/rag-llm-service/src/config.py` reading environment variables (OLLAMA_HOST, VECTOR_STORE_URL, VECTOR_STORE_COLLECTION, EMBEDDING_MODEL, MIN_CONFIDENCE_THRESHOLD, LOG_LEVEL, RAG_SERVICE_PORT)
 
 **Deliverable**: Core schemas, logging, and configuration ready for use by retrieval/generation pipelines
 
@@ -55,12 +55,12 @@ Tasks are organized by **implementation phase** and **user story**, enabling ind
 
 **Goal**: Implement ChromaDB querying and chunk retrieval with semantic search.
 
-- [ ] T014 Implement `services/rag-llm-service/src/core/retrieval.py` with `VectorStoreClient` class (connect to ChromaDB, query with 384-dim embeddings, handle timeouts, parse response)
-- [ ] T015 Implement `VectorStoreClient.query()` method (accepts embedding vector + filters, returns list of RetrievedChunk objects with similarity scores)
-- [ ] T016 Implement error handling in retrieval (catch connection errors, 404 not found, 500 server errors, return "I don't know" on ChromaDB unavailable)
-- [ ] T017 Implement confidence calculation (average similarity score from retrieved chunks; if <0.5, flag for low confidence)
-- [ ] T018 Implement metadata extraction from ChromaDB response (source_doc, source_type, page_number, section_title, chunk_index for citation building)
-- [ ] T019 [P] Implement `services/rag-llm-service/tests/unit/test_retrieval.py` unit tests (query with mock ChromaDB, verify chunk ordering by similarity, verify metadata parsing, test error handling)
+- [X] T014 Implement `services/rag-llm-service/src/core/retrieval.py` with `VectorStoreClient` class (connect to ChromaDB, query with 384-dim embeddings, handle timeouts, parse response)
+- [X] T015 Implement `VectorStoreClient.query()` method (accepts embedding vector + filters, returns list of RetrievedChunk objects with similarity scores)
+- [X] T016 Implement error handling in retrieval (catch connection errors, 404 not found, 500 server errors, return "I don't know" on ChromaDB unavailable)
+- [X] T017 Implement confidence calculation (average similarity score from retrieved chunks; if <0.5, flag for low confidence)
+- [X] T018 Implement metadata extraction from ChromaDB response (source_doc, source_type, page_number, section_title, chunk_index for citation building)
+- [X] T019 [P] Implement `services/rag-llm-service/tests/unit/test_retrieval.py` unit tests (query with mock ChromaDB, verify chunk ordering by similarity, verify metadata parsing, test error handling)
 
 **Deliverable**: Retrieval pipeline can query ChromaDB and extract relevant chunks with citations
 
@@ -70,11 +70,11 @@ Tasks are organized by **implementation phase** and **user story**, enabling ind
 
 **Goal**: Integrate with HR Data Pipeline embedding API for query embedding generation.
 
-- [ ] T020 Implement `services/rag-llm-service/src/core/embedding_client.py` with `EmbeddingAPIClient` class (call HR Data Pipeline embedding API endpoint, handle timeouts, validate 384-dim response)
-- [ ] T021 Implement `EmbeddingAPIClient.embed()` method (accepts query text, returns 384-dim vector from HR pipeline API)
-- [ ] T022 Implement embedding dimension validation (assert API returns exactly 384-dim; log error and fail query if mismatch)
-- [ ] T023 Implement error handling for embedding API (connection timeout, 404/500 errors, retry logic with exponential backoff)
-- [ ] T024 [P] Implement `services/rag-llm-service/tests/unit/test_embedding_client.py` unit tests (mock HR pipeline API, verify 384-dim output, test error handling, test retry logic)
+- [X] T020 Implement `services/rag-llm-service/src/core/embedding_client.py` with `EmbeddingAPIClient` class (call HR Data Pipeline embedding API endpoint, handle timeouts, validate 384-dim response)
+- [X] T021 Implement `EmbeddingAPIClient.embed()` method (accepts query text, returns 384-dim vector from HR pipeline API)
+- [X] T022 Implement embedding dimension validation (assert API returns exactly 384-dim; log error and fail query if mismatch)
+- [X] T023 Implement error handling for embedding API (connection timeout, 404/500 errors, retry logic with exponential backoff)
+- [X] T024 [P] Implement `services/rag-llm-service/tests/unit/test_embedding_client.py` unit tests (mock HR pipeline API, verify 384-dim output, test error handling, test retry logic)
 
 **Deliverable**: Query embeddings retrieved from HR Data Pipeline API with proper error handling
 
