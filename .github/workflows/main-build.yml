@@ -1,8 +1,294 @@
 name: Main Build
 # Builds and releases production images on main branch pushes
+# Tags: main-{sha} + latest
+# Pushes to ghcr.io, establishes benchmark baseline
 
 on:
   push:
     branches: [main]
+  workflow_dispatch:  # Allow manual trigger
 
-# Will be implemented in Phase 4
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  PYTHON_VERSION: '3.11'
+
+concurrency:
+  group: main-build
+  cancel-in-progress: false  # Only one main build at a time
+
+jobs:
+  # ========================================================================
+  # JOB 1: BUILD AND PUSH - Production image build
+  # ========================================================================
+  build-and-push:
+    name: Build and Push
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.meta.outputs.full_image }}
+      tag: ${{ steps.meta.outputs.tag }}
+      digest: ${{ steps.digest.outputs.digest }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker BuildKit
+        uses: docker/setup-buildx-action@v3
+
+      - name: Generate image tags
+        id: meta
+        run: |
+          COMMIT_SHORT=$(git rev-parse --short HEAD)
+          MAIN_TAG="main-${COMMIT_SHORT}"
+          
+          echo "tag=${MAIN_TAG}" >> $GITHUB_OUTPUT
+          echo "full_image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${MAIN_TAG}" >> $GITHUB_OUTPUT
+          echo "full_image_latest=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_OUTPUT
+          
+          echo "Main branch build"
+          echo "  Tag: ${MAIN_TAG}"
+          echo "  Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${MAIN_TAG}"
+          echo "  Latest: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.full_image }}
+            ${{ steps.meta.outputs.full_image_latest }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            PYTHON_VERSION=${{ env.PYTHON_VERSION }}
+
+      - name: Get image digest
+        id: digest
+        run: |
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${{ steps.meta.outputs.full_image }} 2>/dev/null || echo "unknown")
+          echo "digest=${DIGEST}" >> $GITHUB_OUTPUT
+          echo "Image digest: ${DIGEST}"
+
+      - name: Run Trivy vulnerability scan on main image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.meta.outputs.full_image }}
+          format: 'json'
+          output: 'trivy-results.json'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Check Trivy scan results
+        run: |
+          CRITICAL=$(jq '[.Results[]?.Misconfigurations[]? | select(.Severity=="CRITICAL")] | length' trivy-results.json 2>/dev/null || echo 0)
+          HIGH=$(jq '[.Results[]?.Misconfigurations[]? | select(.Severity=="HIGH")] | length' trivy-results.json 2>/dev/null || echo 0)
+          
+          if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
+            echo "❌ Trivy found vulnerabilities: CRITICAL=$CRITICAL, HIGH=$HIGH"
+            exit 1
+          fi
+          echo "✅ Main build image scan passed"
+
+      - name: Save build metadata
+        run: |
+          cat > build-metadata.json << EOF
+          {
+            "image": "${{ steps.meta.outputs.full_image }}",
+            "image_latest": "${{ steps.meta.outputs.full_image_latest }}",
+            "tag": "${{ steps.meta.outputs.tag }}",
+            "digest": "${{ steps.digest.outputs.digest }}",
+            "commit": "$(git rev-parse HEAD)",
+            "timestamp": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')",
+            "status": "pushed"
+          }
+          EOF
+
+      - name: Upload build metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: main-build-metadata
+          path: build-metadata.json
+          retention-days: 90
+
+  # ========================================================================
+  # JOB 2: BENCHMARK - Establish baseline for regression detection
+  # ========================================================================
+  benchmark:
+    name: Benchmark Baseline
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull Docker image
+        run: docker pull ${{ needs.build-and-push.outputs.image }}
+
+      - name: Start API container
+        run: |
+          docker run -d \
+            --name hive-api \
+            -p 8000:8000 \
+            -e ENV=test \
+            ${{ needs.build-and-push.outputs.image }}
+          echo "API container started"
+
+      - name: Wait for API health check
+        run: |
+          for i in {1..30}; do
+            if curl -sf http://localhost:8000/health > /dev/null 2>&1; then
+              echo "✅ Main build API is healthy"
+              exit 0
+            fi
+            echo "Attempt $i/30..."
+            sleep 2
+          done
+          echo "❌ API startup timeout"
+          docker logs hive-api
+          exit 1
+
+      - name: Run benchmark suite (establish baseline)
+        run: |
+          python -m tests.benchmark.benchmark \
+            --api-url http://localhost:8000 \
+            --suite full \
+            --output-json benchmark-baseline.json \
+            --output-junit benchmark-baseline.xml \
+            -v
+
+      - name: Log benchmark results
+        run: |
+          echo "📊 Main Build Benchmark Baseline:"
+          python -c "import json; b=json.load(open('benchmark-baseline.json')); print(f'  Accuracy: {b[\"accuracy\"]:.1f}%'); print(f'  Citations: {b[\"citations_accuracy\"]:.1f}%'); print(f'  P95: {b[\"latency\"][\"p95\"]:.0f}ms')"
+
+      - name: Save baseline as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: main-benchmark-baseline
+          path: |
+            benchmark-baseline.json
+            benchmark-baseline.xml
+          retention-days: 90
+
+      - name: Stop API container
+        if: always()
+        run: |
+          docker stop hive-api 2>/dev/null || true
+          docker rm hive-api 2>/dev/null || true
+
+  # ========================================================================
+  # JOB 3: NOTIFY - Send notifications on completion
+  # ========================================================================
+  notify:
+    name: Notify Build Completion
+    if: always()
+    needs: [build-and-push, benchmark]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine build status
+        id: status
+        run: |
+          if [ "${{ needs.build-and-push.result }}" == "success" ] && [ "${{ needs.benchmark.result }}" == "success" ]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "message=✅ Main build succeeded"
+          else
+            echo "status=failure" >> $GITHUB_OUTPUT
+            echo "message=❌ Main build failed"
+          fi
+
+      - name: Create notification payload
+        run: |
+          cat > notification.json << EOF
+          {
+            "status": "${{ steps.status.outputs.status }}",
+            "message": "${{ steps.status.outputs.message }}",
+            "image": "${{ needs.build-and-push.outputs.image }}",
+            "tag": "${{ needs.build-and-push.outputs.tag }}",
+            "digest": "${{ needs.build-and-push.outputs.digest }}",
+            "repo": "${{ github.repository }}",
+            "ref": "${{ github.ref }}",
+            "sha": "${{ github.sha }}",
+            "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          }
+          EOF
+          cat notification.json
+
+      - name: Send Slack notification
+        if: vars.SLACK_WEBHOOK_URL != ''
+        run: |
+          SLACK_MESSAGE="Main build ${{ steps.status.outputs.status }}"
+          if [ "${{ steps.status.outputs.status }}" == "success" ]; then
+            COLOR="36a64f"
+            TEXT="✅ Main build succeeded\nImage: ${{ needs.build-and-push.outputs.image }}"
+          else
+            COLOR="ff0000"
+            TEXT="❌ Main build failed\nCheck logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          fi
+          
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{\"attachments\":[{\"color\":\"${COLOR}\",\"title\":\"${SLACK_MESSAGE}\",\"text\":\"${TEXT}\"}]}" \
+            "${{ secrets.SLACK_WEBHOOK_URL }}" || true
+
+      - name: Upload notification artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: main-build-notification
+          path: notification.json
+          retention-days: 90
+
+  # ========================================================================
+  # Summary
+  # ========================================================================
+  summary:
+    name: Build Summary
+    if: always()
+    needs: [build-and-push, benchmark, notify]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build summary
+        run: |
+          echo "::group::Main Build Summary"
+          echo "Build: ${{ needs.build-and-push.result }}"
+          echo "Benchmark: ${{ needs.benchmark.result }}"
+          echo "Image: ${{ needs.build-and-push.outputs.image }}"
+          echo "Tag: ${{ needs.build-and-push.outputs.tag }}"
+          echo "Digest: ${{ needs.build-and-push.outputs.digest }}"
+          echo "::endgroup::"
+          
+          if [ "${{ needs.build-and-push.result }}" != "success" ]; then
+            echo "❌ Build failed"
+            exit 1
+          fi
+          
+          echo "✅ Main build completed successfully"
