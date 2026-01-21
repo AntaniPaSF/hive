@@ -1,6 +1,6 @@
 # Feature Specification: HR Data Pipeline & Knowledge Base
 
-**Feature Branch**: `1-hr-data-pipeline`  
+**Feature Branch**: `020-hr-data-pipeline`  
 **Created**: January 21, 2026  
 **Status**: Draft  
 **Input**: User description: "Create ingestion pipeline for provided HR policy PDF (docs → embeddings → vector DB), augment with relevant Kaggle/HuggingFace data aligned to PDF topics without contradictions or duplicates, chunk documents for optimal retrieval, version control knowledge base."

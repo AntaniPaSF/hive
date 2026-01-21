@@ -1,0 +1,305 @@
+openapi: 3.0.0
+info:
+  title: Ingestion Pipeline CLI
+  version: 1.0.0
+  description: |
+    Command-line interface for HR data ingestion pipeline.
+    While this is a CLI tool (not HTTP API), this OpenAPI spec documents
+    the programmatic interface for clarity and contract testing.
+
+paths:
+  /ingest:
+    post:
+      summary: Ingest documents from specified source
+      description: |
+        Process documents from data/ directory and store chunks in vector database.
+        Validates external data for contradictions and duplicates.
+      operationId: ingestDocuments
+      parameters:
+        - name: source
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pdf, kaggle, huggingface, all]
+            default: all
+          description: Which source to ingest (default: all)
+        - name: rebuild
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: Clear vector database before ingestion
+        - name: validate_only
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: Run validation without ingesting chunks
+      responses:
+        '200':
+          description: Ingestion completed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - status
+                  - documents_processed
+                  - chunks_created
+                  - contradictions_excluded
+                  - duplicates_skipped
+                  - processing_time_seconds
+                properties:
+                  status:
+                    type: string
+                    enum: [success, partial_success]
+                    description: Overall ingestion status
+                  documents_processed:
+                    type: integer
+                    minimum: 0
+                    description: Number of documents successfully processed
+                  chunks_created:
+                    type: integer
+                    minimum: 0
+                    description: Number of chunks stored in vector database
+                  contradictions_excluded:
+                    type: integer
+                    minimum: 0
+                    description: Number of chunks excluded due to contradictions
+                  duplicates_skipped:
+                    type: integer
+                    minimum: 0
+                    description: Number of chunks skipped due to duplication
+                  processing_time_seconds:
+                    type: number
+                    minimum: 0
+                    description: Total time elapsed during ingestion
+                  errors:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/IngestionError'
+                    description: List of errors encountered (if any)
+              example:
+                status: success
+                documents_processed: 3
+                chunks_created: 1247
+                contradictions_excluded: 5
+                duplicates_skipped: 18
+                processing_time_seconds: 245.3
+                errors: []
+        '400':
+          description: Invalid parameters provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal error during ingestion
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /status:
+    get:
+      summary: Check ingestion pipeline status
+      description: Returns information about the current state of the vector database
+      operationId: getStatus
+      responses:
+        '200':
+          description: Status retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - vector_db_status
+                  - total_chunks
+                  - total_documents
+                  - last_ingestion
+                properties:
+                  vector_db_status:
+                    type: string
+                    enum: [healthy, error, empty]
+                    description: Vector database health status
+                  total_chunks:
+                    type: integer
+                    minimum: 0
+                    description: Total chunks in vector database
+                  total_documents:
+                    type: integer
+                    minimum: 0
+                    description: Total documents tracked in manifest
+                  last_ingestion:
+                    type: string
+                    format: date-time
+                    nullable: true
+                    description: Timestamp of most recent ingestion
+                  configuration:
+                    $ref: '#/components/schemas/Configuration'
+              example:
+                vector_db_status: healthy
+                total_chunks: 1247
+                total_documents: 3
+                last_ingestion: "2026-01-21T10:45:00Z"
+                configuration:
+                  embedding_model: all-MiniLM-L6-v2
+                  chunk_size: 512
+                  chunk_overlap: 50
+
+  /validate:
+    post:
+      summary: Validate documents without ingesting
+      description: |
+        Run contradiction and duplicate detection on specified documents
+        without storing chunks in vector database. Useful for testing.
+      operationId: validateDocuments
+      parameters:
+        - name: source
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pdf, kaggle, huggingface, all]
+            default: all
+          description: Which source to validate
+      responses:
+        '200':
+          description: Validation completed
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - status
+                  - documents_validated
+                  - total_chunks
+                  - contradictions_found
+                  - duplicates_found
+                properties:
+                  status:
+                    type: string
+                    enum: [pass, fail]
+                    description: Overall validation result
+                  documents_validated:
+                    type: integer
+                    minimum: 0
+                  total_chunks:
+                    type: integer
+                    minimum: 0
+                  contradictions_found:
+                    type: integer
+                    minimum: 0
+                  duplicates_found:
+                    type: integer
+                    minimum: 0
+                  issues:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ValidationIssue'
+
+components:
+  schemas:
+    IngestionError:
+      type: object
+      required:
+        - document_path
+        - error_type
+        - error_message
+      properties:
+        document_path:
+          type: string
+          description: Path to document that caused error
+        error_type:
+          type: string
+          enum: [parse_error, validation_error, storage_error]
+          description: Category of error
+        error_message:
+          type: string
+          description: Detailed error message
+
+    ValidationIssue:
+      type: object
+      required:
+        - chunk_id
+        - issue_type
+        - severity
+        - description
+      properties:
+        chunk_id:
+          type: string
+          format: uuid
+          description: Chunk with validation issue
+        issue_type:
+          type: string
+          enum: [contradiction, duplicate, low_quality]
+          description: Type of issue detected
+        severity:
+          type: string
+          enum: [error, warning]
+          description: Issue severity
+        description:
+          type: string
+          description: Human-readable issue description
+        related_chunk_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Chunk causing conflict (for contradictions/duplicates)
+
+    Configuration:
+      type: object
+      required:
+        - embedding_model
+        - chunk_size
+        - chunk_overlap
+        - similarity_threshold_relevance
+        - similarity_threshold_duplicate
+        - vector_db_type
+      properties:
+        embedding_model:
+          type: string
+          description: sentence-transformers model name
+        chunk_size:
+          type: integer
+          minimum: 100
+          maximum: 2048
+          description: Maximum tokens per chunk
+        chunk_overlap:
+          type: integer
+          minimum: 0
+          maximum: 512
+          description: Overlap tokens between chunks
+        similarity_threshold_relevance:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Minimum similarity for external data
+        similarity_threshold_duplicate:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Maximum similarity before duplicate
+        vector_db_type:
+          type: string
+          enum: [chromadb]
+          description: Vector database implementation
+
+    Error:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Error code
+        message:
+          type: string
+          description: Human-readable error message
+        details:
+          type: object
+          description: Additional error context

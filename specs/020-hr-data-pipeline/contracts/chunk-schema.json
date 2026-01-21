@@ -1,0 +1,179 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Chunk Schema",
+  "description": "Data structure for a document chunk with embedding and metadata",
+  "type": "object",
+  "required": ["id", "text", "embedding", "metadata"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for the chunk"
+    },
+    "text": {
+      "type": "string",
+      "minLength": 100,
+      "description": "Text content of the chunk (minimum 100 characters)"
+    },
+    "embedding": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 384,
+      "maxItems": 384,
+      "description": "384-dimensional embedding vector from all-MiniLM-L6-v2 model"
+    },
+    "metadata": {
+      "$ref": "#/definitions/metadata"
+    }
+  },
+  "definitions": {
+    "metadata": {
+      "type": "object",
+      "required": [
+        "source_doc",
+        "source_type",
+        "page_number",
+        "section_title",
+        "chunk_index",
+        "timestamp",
+        "embedding_model",
+        "embedding_model_version"
+      ],
+      "properties": {
+        "source_doc": {
+          "type": "string",
+          "maxLength": 255,
+          "description": "Original document filename"
+        },
+        "source_type": {
+          "type": "string",
+          "enum": ["pdf", "kaggle", "huggingface"],
+          "description": "Document source type"
+        },
+        "page_number": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Page number (0 for non-PDF sources)"
+        },
+        "section_title": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Section heading where chunk appears"
+        },
+        "chunk_index": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Sequential position of chunk within document"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Chunk creation timestamp (ISO 8601)"
+        },
+        "related_topic": {
+          "type": ["string", "null"],
+          "description": "PDF topic this chunk addresses (null for PDF source, required for external)"
+        },
+        "validation_status": {
+          "$ref": "#/definitions/validation_status"
+        },
+        "embedding_model": {
+          "type": "string",
+          "description": "Model used for embedding generation",
+          "examples": ["all-MiniLM-L6-v2"]
+        },
+        "embedding_model_version": {
+          "type": "string",
+          "description": "Model version",
+          "examples": ["2.2.2"]
+        }
+      }
+    },
+    "validation_status": {
+      "type": "object",
+      "required": ["contradiction_check", "duplicate_check"],
+      "properties": {
+        "contradiction_check": {
+          "type": "object",
+          "required": ["passed", "checked_against", "max_similarity"],
+          "properties": {
+            "passed": {
+              "type": "boolean",
+              "description": "Whether chunk passed contradiction detection"
+            },
+            "checked_against": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "description": "List of PDF chunk IDs checked for contradictions"
+            },
+            "max_similarity": {
+              "type": ["number", "null"],
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Highest similarity score found (null if no checks)"
+            }
+          }
+        },
+        "duplicate_check": {
+          "type": "object",
+          "required": ["passed", "checked_against", "max_similarity"],
+          "properties": {
+            "passed": {
+              "type": "boolean",
+              "description": "Whether chunk passed duplicate detection (similarity < 0.85)"
+            },
+            "checked_against": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "description": "List of existing chunk IDs checked for duplicates"
+            },
+            "max_similarity": {
+              "type": ["number", "null"],
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Highest similarity score found (null if no checks)"
+            }
+          }
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "id": "750e8400-e29b-41d4-a716-446655440002",
+      "text": "Employees are entitled to 15 days of paid vacation per year. Vacation must be requested at least 2 weeks in advance and approved by direct manager. Unused vacation does not roll over to the next year.",
+      "embedding": [0.023, -0.145, 0.891],
+      "metadata": {
+        "source_doc": "Software_Company_Docupedia_FILLED.pdf",
+        "source_type": "pdf",
+        "page_number": 42,
+        "section_title": "Vacation and Paid Time Off",
+        "chunk_index": 12,
+        "timestamp": "2026-01-21T10:35:22Z",
+        "related_topic": null,
+        "validation_status": {
+          "contradiction_check": {
+            "passed": true,
+            "checked_against": [],
+            "max_similarity": null
+          },
+          "duplicate_check": {
+            "passed": true,
+            "checked_against": [],
+            "max_similarity": null
+          }
+        },
+        "embedding_model": "all-MiniLM-L6-v2",
+        "embedding_model_version": "2.2.2"
+      }
+    }
+  ]
+}
