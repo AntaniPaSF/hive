@@ -10,7 +10,7 @@
 - Q1 Trigger: Webhook (N8N receives chat submissions via Webhook node)
 - Q2 N8N Port/Path: `N8N_PORT` set via env; `N8N_BASE_PATH=/n8n`
 - Q3 Error Display: Inline banner in the workflow's UI path
-- Q4 Backend URL Resolution: Use Docker internal service DNS (e.g., `http://backend:${INTERNAL_PORT}`) within Compose; avoid localhost coupling.
+- Q4 Backend URL Resolution: Use Docker internal service DNS (e.g., `http://app:${INTERNAL_PORT}`) within Compose; avoid localhost coupling.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -45,6 +45,7 @@ As a user, I can interact with a simple N8N-based chat UI that sends my message 
 
 1. Given N8N and backend are running, When I submit a chat message, Then the workflow calls `/api/chat` and renders `answer` + `citations[]`.
 2. Given a query without available sources, When I submit a chat message, Then the workflow displays a clear message that citations are required and no answer is shown.
+3. Given a rendered response with citations, When I click a citation link, Then the source document opens and the section reference is visible via the URL anchor.
 
 ---
 
@@ -109,7 +110,8 @@ As a contributor, I can start N8N + backend + RAG stub with one command and veri
 - **FR-010**: Configure N8N via env with `N8N_PORT` and `N8N_BASE_PATH=/n8n`; no hardcoded defaults in code.
 - **FR-011**: Display errors as an inline banner within the workflow UI path and include the `request_id` when available.
 
-- **FR-012**: N8N MUST call the backend via internal service DNS (e.g., `backend:${INTERNAL_PORT}`) inside the Compose network; no reliance on host-localhost ports for intra-service calls.
+- **FR-012**: N8N MUST call the backend via internal service DNS (e.g., `app:${INTERNAL_PORT}`) inside the Compose network; no reliance on host-localhost ports for intra-service calls.
+ - **FR-013**: Citations must render as clickable links that navigate to the original source document and section anchor.
 
 ### Key Entities *(include if feature involves data)*
 

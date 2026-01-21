@@ -65,6 +65,7 @@ Independent Test: Single command brings services up; health OK; UI path works of
  - [x] T032 Add edge case docs (long messages, port conflicts) at specs/001-n8n-chat-workflow/quickstart.md
  - [x] T033 Add minimal RAG stub contract and sample data at specs/001-n8n-chat-workflow/contracts/openapi.yaml
  - [x] T034 Validate constitution gates and update plan checkboxes at specs/001-n8n-chat-workflow/plan.md
+ - [x] T035 [P] Measure /api/chat latency (p50/p95) via scripts/verify.sh and document command in specs/001-n8n-chat-workflow/quickstart.md
 
 ## Dependencies
 

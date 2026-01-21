@@ -10,6 +10,7 @@ INDEX_PATH = "app/ui/static/index.html"
 SEED_PATH = "app/data/seed/sample-policies.md"
 SESSION_TTL_SECONDS = 600  # 10 minutes TTL
 SESSION_STORE = {}
+DOCS_DIR = os.path.dirname(SEED_PATH)
 
 
 def _now():
@@ -77,6 +78,25 @@ class Handler(BaseHTTPRequestHandler):
             "request_id": self.request_id,
             "session_id": getattr(self, "session_id", None),
         }) + "\n")
+        if parsed.path.startswith("/docs/"):
+            # Serve seed documents for clickable citation links
+            name = os.path.basename(parsed.path[len("/docs/"):])
+            target = os.path.join(DOCS_DIR, name)
+            if not os.path.realpath(target).startswith(os.path.realpath(DOCS_DIR)):
+                return json_response(self, 400, {"error": "Invalid document path", "request_id": self.request_id})
+            try:
+                with open(target, "r", encoding="utf-8") as f:
+                    data = f.read()
+                # Serve as plain text for MVP; anchors are preserved in URL
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.send_header("Content-Length",
+                                 str(len(data.encode("utf-8"))))
+                self.end_headers()
+                self.wfile.write(data.encode("utf-8"))
+                return
+            except FileNotFoundError:
+                return json_response(self, 404, {"error": "Document not found", "request_id": self.request_id})
         if parsed.path == "/health":
             return json_response(self, 200, {"status": "ok"})
         if parsed.path == "/demo":
@@ -128,7 +148,8 @@ class Handler(BaseHTTPRequestHandler):
             turns = len(session["history"])
             prev = session["history"][-2]["prompt"] if turns > 1 else None
             # Minimal cited answer stub (MVP): always include a sample citation
-            citation = {"doc": os.path.basename(SEED_PATH), "section": "Vacation Policy §1"}
+            citation = {"doc": os.path.basename(
+                SEED_PATH), "section": "Vacation Policy §1"}
             answer = (
                 "Example answer: Please refer to our vacation policy."
                 + (f" Prior prompt: '{prev}'." if prev else "")

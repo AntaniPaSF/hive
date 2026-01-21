@@ -65,6 +65,16 @@ Sessions are ephemeral with a 10-minute TTL.
 - Backend: `GET /health` on internal port
 - Structured JSON logs include `request_id` for traceability
 
+## Performance
+- Measure chat API latency (p50/p95 target: p95 < 10s):
+
+```bash
+export APP_PORT=${APP_PORT:-8080}
+MEASURE_LATENCY=1 COUNT=20 bash scripts/verify.sh
+```
+
+The script runs N requests to `/api/chat` and prints p50/p95.
+
 ## Packaging (offline)
 - Use existing packaging scripts to build and save images as tar; run offline via `docker load`.
 

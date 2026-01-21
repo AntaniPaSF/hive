@@ -61,7 +61,7 @@
         },
         {
             "parameters": {
-                "functionCode": "const ans = $json.answer || ''; const cits = Array.isArray($json.citations) ? $json.citations : []; const rid = $json.request_id || ''; const list = cits.map(c => `<li>${c.doc} — ${c.section}</li>`).join(''); const html = `<div style=\\\"font-family:Inter,system-ui,sans-serif;\\\"><h2 style=\\\"margin:0 0 8px\\\">Assistant Response</h2><div style=\\\"margin-bottom:8px\\\">${ans}</div><div><strong>Citations</strong><ul>${list}</ul></div><div style=\\\"margin-top:12px;color:#666\\\">request_id: ${rid}</div></div>`; return [{ json: { statusCode: 200, body: html } }];"
+                "functionCode": "const ans = $json.answer || ''; const cits = Array.isArray($json.citations) ? $json.citations : []; const rid = $json.request_id || ''; const list = cits.map(c => { const doc = c.doc || ''; const section = c.section || ''; const href = `/docs/${encodeURIComponent(doc)}#${encodeURIComponent(section)}`; return `<li><a href=\\\"${href}\\\">${doc} — ${section}</a></li>`; }).join(''); const html = `<div style=\\\"font-family:Inter,system-ui,sans-serif;\\\"><h2 style=\\\"margin:0 0 8px\\\">Assistant Response</h2><div style=\\\"margin-bottom:8px\\\">${ans}</div><div><strong>Citations</strong><ul>${list}</ul></div><div style=\\\"margin-top:12px;color:#666\\\">request_id: ${rid}</div></div>`; return [{ json: { statusCode: 200, body: html } }];"
             },
             "name": "Build Success HTML",
             "type": "n8n-nodes-base.function",
