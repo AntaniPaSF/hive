@@ -4,3 +4,7 @@ services:
       - INTERNAL_PORT=${INTERNAL_PORT:-8000}
     ports:
       - "${APP_PORT:?APP_PORT must be set}:${INTERNAL_PORT:-8000}"
+
+  n8n:
+    ports:
+      - "${N8N_PORT:?N8N_PORT must be set}:${N8N_PORT:-5678}"

@@ -1,0 +1,16 @@
+# Exclude unnecessary files from Docker build context
+.git/
+.gitignore
+.vscode/
+.idea/
+node_modules/
+dist/
+coverage/
+*.log*
+.env*
+Dockerfile*
+docker-compose*.yml
+scripts/
+specs/
+README.md
+Makefile

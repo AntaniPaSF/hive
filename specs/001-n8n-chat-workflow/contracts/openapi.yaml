@@ -1,0 +1,148 @@
+openapi: 3.0.3
+info:
+  title: HR Policy Chat API
+  version: 0.1.0
+servers:
+  - url: http://backend:${INTERNAL_PORT}
+paths:
+  /api/chat:
+    post:
+      summary: Submit a chat prompt and receive an answer with citations
+      operationId: chat
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [session_id, prompt]
+              properties:
+                session_id:
+                  type: string
+                  description: Ephemeral session identifier
+                prompt:
+                  type: string
+                  description: User message to the assistant
+      responses:
+        '200':
+          description: Cited answer
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [answer, citations, request_id]
+                properties:
+                  answer:
+                    type: string
+                  citations:
+                    type: array
+                    minItems: 1
+                    items:
+                      type: object
+                      required: [doc, section]
+                      properties:
+                        doc:
+                          type: string
+                        section:
+                          type: string
+                  request_id:
+                    type: string
+        '400':
+          description: Invalid request or missing citations
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error, request_id]
+                properties:
+                  error:
+                    type: string
+                  request_id:
+                    type: string
+        '500':
+          description: Backend error
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error, request_id]
+                properties:
+                  error:
+                    type: string
+                  request_id:
+                    type: string
+
+  /ask:
+    post:
+      summary: Enforce citations before answering
+      operationId: askWithCitations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [citations]
+              properties:
+                citations:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [doc, section]
+                    properties:
+                      doc:
+                        type: string
+                      section:
+                        type: string
+      responses:
+        '200':
+          description: Answer placeholder with citations echoed back
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message, citations, request_id]
+                properties:
+                  message:
+                    type: string
+                  citations:
+                    type: array
+                    items:
+                      type: object
+                      required: [doc, section]
+                      properties:
+                        doc:
+                          type: string
+                        section:
+                          type: string
+                  request_id:
+                    type: string
+        '400':
+          description: Missing or invalid citations
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error, request_id]
+                properties:
+                  error:
+                    type: string
+                  request_id:
+                    type: string
+
+components:
+  examples:
+    ChatRequest:
+      summary: Chat request
+      value:
+        session_id: demo-1
+        prompt: What is our vacation policy?
+    CitedAnswer:
+      summary: Example cited answer
+      value:
+        answer: Example answer: Please refer to our vacation policy.
+        citations:
+          - doc: sample-policies.md
+            section: Vacation Policy §1
+        request_id: 123e4567e89b12d3a456426655440000
