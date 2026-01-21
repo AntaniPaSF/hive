@@ -96,14 +96,14 @@
 
 ### Implementation for User Story 2
 
-- [ ] T030 [P] [US2] Implement calculate_percentiles() function in tests/benchmark/reporters/performance.py using numpy.percentile() per research.md
-- [ ] T031 [US2] Update BenchmarkReport dataclass in tests/benchmark/models/report.py to include p50/p95/p99 fields in performance metrics dict
-- [ ] T032 [US2] Update benchmark.py main runner to collect all latency_ms values from TestResults
-- [ ] T033 [US2] Update benchmark.py to call calculate_percentiles() on collected latencies after all questions complete
-- [ ] T034 [US2] Update CLIReporter.generate_report() to display performance section with p50/p95/p99 metrics
-- [ ] T035 [US2] Update JSONReporter.save_report() to include performance metrics in JSON output
-- [ ] T036 [US2] Add p95 latency validation in benchmark.py to flag as warning if p95 >10 seconds (constitution requirement)
-- [ ] T037 [US2] Update CLI report to identify and list specific questions that exceeded 10s response time
+- [X] T030 [P] [US2] Implement calculate_percentiles() function in tests/benchmark/reporters/performance.py using numpy.percentile() per research.md
+- [X] T031 [US2] Update BenchmarkReport dataclass in tests/benchmark/models/report.py to include p50/p95/p99 fields in performance metrics dict
+- [X] T032 [US2] Update benchmark.py main runner to collect all latency_ms values from TestResults
+- [X] T033 [US2] Update benchmark.py to call calculate_percentiles() on collected latencies after all questions complete
+- [X] T034 [US2] Update CLIReporter.generate_report() to display performance section with p50/p95/p99 metrics
+- [X] T035 [US2] Update JSONReporter.save_report() to include performance metrics in JSON output
+- [X] T036 [US2] Add p95 latency validation in benchmark.py to flag as warning if p95 >10 seconds (constitution requirement)
+- [X] T037 [US2] Update CLI report to identify and list specific questions that exceeded 10s response time
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work independently - benchmark suite provides accuracy + performance validation
 
@@ -121,14 +121,14 @@
 
 ### Implementation for User Story 3
 
-- [ ] T038 [P] [US3] Create .env.example template file at repository root with BENCHMARK_API_URL, BENCHMARK_TIMEOUT, BENCHMARK_THRESHOLD defaults
-- [ ] T039 [P] [US3] Update tests/benchmark/config.py to load configuration from .env file using python-dotenv
-- [ ] T040 [US3] Update benchmark.py CLI argument parsing to use environment variables as defaults (fallback to .env values)
-- [ ] T041 [US3] Add validation in benchmark.py to fail fast if API endpoint URL is not provided (no default for URL)
-- [ ] T042 [US3] Implement scripts/benchmark.sh wrapper with usage instructions and automatic virtual environment setup
-- [ ] T043 [US3] Update scripts/benchmark.sh to export APP_PORT=8080 before running benchmark if not already set
-- [ ] T044 [US3] Add --version flag to benchmark.py to display benchmark suite version from ground_truth.yaml metadata
-- [ ] T045 [US3] Update quickstart.md with verified single-command setup instructions and expected output examples
+- [X] T038 [P] [US3] Create .env.example template file at repository root with BENCHMARK_API_URL, BENCHMARK_TIMEOUT, BENCHMARK_THRESHOLD defaults
+- [X] T039 [P] [US3] Update tests/benchmark/config.py to load configuration from .env file using python-dotenv
+- [X] T040 [US3] Update benchmark.py CLI argument parsing to use environment variables as defaults (fallback to .env values)
+- [X] T041 [US3] Add validation in benchmark.py to fail fast if API endpoint URL is not provided (no default for URL)
+- [X] T042 [US3] Implement scripts/benchmark.sh wrapper with usage instructions and automatic virtual environment setup
+- [X] T043 [US3] Update scripts/benchmark.sh to export APP_PORT=8080 before running benchmark if not already set
+- [X] T044 [US3] Add --version flag to benchmark.py to display benchmark suite version from ground_truth.yaml metadata
+- [X] T045 [US3] Update quickstart.md with verified single-command setup instructions and expected output examples
 
 **Checkpoint**: All P1 user stories should now be independently functional - MVP is complete and ready for deployment
 

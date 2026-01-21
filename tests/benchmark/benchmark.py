@@ -30,6 +30,7 @@ from tests.benchmark.validators.fuzzy_match import match_against_variations
 from tests.benchmark.validators.citation_check import validate_citations
 from tests.benchmark.reporters.cli_reporter import CLIReporter
 from tests.benchmark.reporters.json_reporter import JSONReporter
+from tests.benchmark.utils import calculate_percentiles
 
 
 def create_http_session(timeout: float) -> requests.Session:
@@ -251,11 +252,16 @@ def run_benchmark(config: "BenchmarkConfig") -> BenchmarkReport:
     
     print()
     
+    # Calculate performance metrics
+    latencies = [r.latency_ms for r in results]
+    performance_metrics = calculate_percentiles(latencies)
+    
     # Create report
     report = BenchmarkReport(
         api_url=config.api_url,
         dataset_version=dataset.version,
         results=results,
+        performance_metrics=performance_metrics,
         config={
             "timeout": config.timeout,
             "threshold": config.threshold,
