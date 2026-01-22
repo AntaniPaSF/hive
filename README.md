@@ -15,22 +15,29 @@ This repository provides a self-contained, CPU-only local MVP skeleton for the C
 - ChromaDB storage (text-based search)
 - CLI ingestion tool
 
-**Phase 2 (P2): Query & RAG Pipeline** - ✅ Tasks 2.1, 2.2, & 2.3 Complete
-- Task 2.1: Query/Retrieval Interface (Complete)
+**Phase 2 (P2): Query & RAG Pipeline** - ✅ Complete (All Tasks)
+- Task 2.1: Query/Retrieval Interface ✅
   - Text-based search with ChromaDB
   - Interactive CLI for testing
   - Comprehensive filtering and context retrieval
-- Task 2.2: RAG Pipeline (Complete)
+- Task 2.2: RAG Pipeline ✅
   - Multi-provider LLM support (OpenAI, Anthropic, Ollama, Mock)
   - Question answering with citations
   - Batch processing capabilities
   - Interactive Q&A interface
-- Task 2.3: API Layer (Complete)
+- Task 2.3: API Layer ✅
   - FastAPI REST API with 8 endpoints
   - OpenAPI/Swagger documentation
   - Request validation and error handling
   - 26/27 integration tests passing
-- Task 2.4: Testing & Optimization (Pending)
+- Task 2.4: Testing & Optimization ✅
+  - Performance benchmarking suite
+  - Query accuracy evaluation
+  - Retrieval precision/recall metrics
+  - Load testing & concurrency
+  - Memory profiling utilities
+  - Response caching layer
+  - Comprehensive test runner
 
 ## Quickstart (Local)
 
@@ -216,6 +223,68 @@ curl -X POST http://localhost:8000/ingest \
 # API documentation
 # Swagger UI: http://localhost:8000/docs
 # ReDoc: http://localhost:8000/redoc
+```
+
+## Testing
+
+### Run All Tests
+
+```bash
+# Full test suite (unit, integration, performance, accuracy, load)
+python run_all_tests.py
+
+# Quick tests only (skip slow tests)
+python run_all_tests.py --quick
+
+# Save reports
+python run_all_tests.py --save-report --save-json
+```
+
+### Run Specific Test Suites
+
+```bash
+# Unit tests
+pytest tests/unit/ -v
+
+# Integration tests
+pytest tests/integration/ -v
+
+# Performance benchmarks
+pytest tests/performance/ -v -s
+
+# Accuracy evaluation
+pytest tests/evaluation/test_accuracy.py -v -s
+
+# Retrieval metrics
+pytest tests/evaluation/test_retrieval.py -v -s
+
+# Load tests
+pytest tests/load/ -v -s
+```
+
+### Memory Profiling
+
+```python
+from app.utils.profiler import MemoryProfiler
+
+profiler = MemoryProfiler()
+profiler.take_snapshot()
+# ... do work ...
+profiler.take_snapshot()
+profiler.print_summary()
+```
+
+### Caching
+
+```python
+from app.cache.manager import init_caches, get_query_cache
+
+# Initialize caches
+init_caches(query_cache_size=100, query_cache_ttl=3600)
+
+# Use in code
+cache = get_query_cache()
+cached = cache.get_query(question, provider, model, top_k)
 ```
 
 ## Dev Container
