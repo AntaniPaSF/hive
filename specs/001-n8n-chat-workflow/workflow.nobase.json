@@ -1,0 +1,192 @@
+{
+    "name": "HR Policy Chat",
+    "nodes": [
+        {
+            "parameters": {
+                "path": "chat",
+                "httpMethod": "POST",
+                "responseMode": "onReceived"
+            },
+            "name": "Webhook",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                240,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "url": "http://app:{{$env.INTERNAL_PORT}}/api/chat",
+                "jsonParameters": true,
+                "sendBody": true,
+                "bodyParametersJson": "={{$json}}",
+                "options": {
+                    "response": {
+                        "responseFormat": "json"
+                    },
+                    "allowUnauthorizedCerts": true
+                }
+            },
+            "name": "HTTP Request",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 1,
+            "position": [
+                540,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "string": [
+                        {
+                            "value1": "={{$json[\"citations\"].length}}",
+                            "operation": "larger",
+                            "value2": 0
+                        }
+                    ]
+                }
+            },
+            "name": "Citations Present",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 1,
+            "position": [
+                780,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "functionCode": "const ans = $json.answer || ''; const cits = Array.isArray($json.citations) ? $json.citations : []; const rid = $json.request_id || ''; const list = cits.map(c => `<li>${c.doc} — ${c.section}</li>`).join(''); const html = `<div style=\\\"font-family:Inter,system-ui,sans-serif;\\\"><h2 style=\\\"margin:0 0 8px\\\">Assistant Response</h2><div style=\\\"margin-bottom:8px\\\">${ans}</div><div><strong>Citations</strong><ul>${list}</ul></div><div style=\\\"margin-top:12px;color:#666\\\">request_id: ${rid}</div></div>`; return [{ json: { statusCode: 200, body: html } }];"
+            },
+            "name": "Build Success HTML",
+            "type": "n8n-nodes-base.function",
+            "typeVersion": 1,
+            "position": [
+                1020,
+                220
+            ]
+        },
+        {
+            "parameters": {
+                "functionCode": "const rid = $json.request_id || ''; const err = $json.error || 'Citations are required — no answer displayed.'; const html = `<div style=\\\"font-family:Inter,system-ui,sans-serif;\\\"><div style=\\\"background:#fee;border:1px solid #f99;padding:8px;margin-bottom:8px;\\\">${err}</div><div style=\\\"margin-top:12px;color:#666\\\">request_id: ${rid}</div></div>`; return [{ json: { statusCode: 400, body: html } }];"
+            },
+            "name": "Build Error HTML",
+            "type": "n8n-nodes-base.function",
+            "typeVersion": 1,
+            "position": [
+                1020,
+                380
+            ]
+        },
+        {
+            "parameters": {
+                "responseCode": "={{$json.statusCode}}",
+                "responseBody": "={{$json.body}}",
+                "options": {
+                    "responseHeaders": {
+                        "Content-Type": "text/html"
+                    }
+                }
+            },
+            "name": "Respond to Webhook (OK)",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                1260,
+                220
+            ]
+        },
+        {
+            "parameters": {
+                "responseCode": "={{$json.statusCode}}",
+                "responseBody": "={{$json.body}}",
+                "options": {
+                    "responseHeaders": {
+                        "Content-Type": "text/html"
+                    }
+                }
+            },
+            "name": "Respond to Webhook (Error)",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                1260,
+                380
+            ]
+        }
+    ],
+    "connections": {
+        "Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "HTTP Request",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "HTTP Request": {
+            "main": [
+                [
+                    {
+                        "node": "Citations Present",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Citations Present": {
+            "main": [
+                [
+                    {
+                        "node": "Build Success HTML",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Build Error HTML",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Build Success HTML": {
+            "main": [
+                [
+                    {
+                        "node": "Respond to Webhook (OK)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Build Error HTML": {
+            "main": [
+                [
+                    {
+                        "node": "Respond to Webhook (Error)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "pinData": {},
+    "settings": {
+        "saveExecutionProgress": true
+    },
+    "staticData": {},
+    "meta": {
+        "version": 1
+    }
+}

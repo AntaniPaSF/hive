@@ -1,11 +1,36 @@
 import json
 import os
 import sys
+import uuid
+import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse
 
 INDEX_PATH = "app/ui/static/index.html"
 SEED_PATH = "app/data/seed/sample-policies.md"
+SESSION_TTL_SECONDS = 600  # 10 minutes TTL
+SESSION_STORE = {}
+DOCS_DIR = os.path.dirname(SEED_PATH)
+
+
+def _now():
+    return int(time.time())
+
+
+def get_session(session_id: str):
+    # Lazy TTL cleanup
+    s = SESSION_STORE.get(session_id)
+    now = _now()
+    if s and now - s.get("updated", 0) > SESSION_TTL_SECONDS:
+        try:
+            del SESSION_STORE[session_id]
+        except KeyError:
+            pass
+        s = None
+    if not s:
+        s = {"history": [], "updated": now}
+        SESSION_STORE[session_id] = s
+    return s
 
 
 def json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict):
@@ -36,12 +61,42 @@ class Handler(BaseHTTPRequestHandler):
             "client": self.client_address[0],
             "method": self.command,
             "path": self.path,
+            "request_id": getattr(self, "request_id", None),
+            "session_id": getattr(self, "session_id", None),
             "msg": format % args,
         }
         sys.stderr.write(json.dumps(payload) + "\n")
 
     def do_GET(self):
+        self.request_id = uuid.uuid4().hex
         parsed = urlparse(self.path)
+        sys.stderr.write(json.dumps({
+            "ts": self.log_date_time_string(),
+            "event": "request.start",
+            "method": "GET",
+            "path": parsed.path,
+            "request_id": self.request_id,
+            "session_id": getattr(self, "session_id", None),
+        }) + "\n")
+        if parsed.path.startswith("/docs/"):
+            # Serve seed documents for clickable citation links
+            name = os.path.basename(parsed.path[len("/docs/"):])
+            target = os.path.join(DOCS_DIR, name)
+            if not os.path.realpath(target).startswith(os.path.realpath(DOCS_DIR)):
+                return json_response(self, 400, {"error": "Invalid document path", "request_id": self.request_id})
+            try:
+                with open(target, "r", encoding="utf-8") as f:
+                    data = f.read()
+                # Serve as plain text for MVP; anchors are preserved in URL
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.send_header("Content-Length",
+                                 str(len(data.encode("utf-8"))))
+                self.end_headers()
+                self.wfile.write(data.encode("utf-8"))
+                return
+            except FileNotFoundError:
+                return json_response(self, 404, {"error": "Document not found", "request_id": self.request_id})
         if parsed.path == "/health":
             return json_response(self, 200, {"status": "ok"})
         if parsed.path == "/demo":
@@ -63,14 +118,60 @@ class Handler(BaseHTTPRequestHandler):
         return json_response(self, 404, {"error": "Not found"})
 
     def do_POST(self):
+        self.request_id = uuid.uuid4().hex
         parsed = urlparse(self.path)
+        sys.stderr.write(json.dumps({
+            "ts": self.log_date_time_string(),
+            "event": "request.start",
+            "method": "POST",
+            "path": parsed.path,
+            "request_id": self.request_id,
+            "session_id": getattr(self, "session_id", None),
+        }) + "\n")
+        if parsed.path == "/api/chat":
+            length = int(self.headers.get("Content-Length", "0"))
+            body = self.rfile.read(length) if length > 0 else b"{}"
+            try:
+                payload = json.loads(body.decode("utf-8"))
+            except Exception:
+                return json_response(self, 400, {"error": "Invalid JSON", "request_id": self.request_id})
+            session_id = payload.get("session_id")
+            prompt = payload.get("prompt")
+            if not session_id or not prompt:
+                return json_response(self, 400, {"error": "Missing required fields: session_id, prompt", "request_id": self.request_id})
+            self.session_id = session_id
+            # Fetch session and update history
+            session = get_session(session_id)
+            session["history"].append({"prompt": prompt})
+            session["updated"] = _now()
+            # Minimal continuity: echo last two prompts count
+            turns = len(session["history"])
+            prev = session["history"][-2]["prompt"] if turns > 1 else None
+            # Minimal cited answer stub (MVP): always include a sample citation
+            citation = {"doc": os.path.basename(
+                SEED_PATH), "section": "Vacation Policy §1"}
+            answer = (
+                "Example answer: Please refer to our vacation policy."
+                + (f" Prior prompt: '{prev}'." if prev else "")
+                + f" Turns in session: {turns}."
+            )
+            return json_response(
+                self,
+                200,
+                {
+                    "answer": answer,
+                    "citations": [citation],
+                    "request_id": self.request_id,
+                    "session_id": self.session_id,
+                },
+            )
         if parsed.path == "/ask":
             length = int(self.headers.get("Content-Length", "0"))
             body = self.rfile.read(length) if length > 0 else b"{}"
             try:
                 payload = json.loads(body.decode("utf-8"))
             except Exception:
-                return json_response(self, 400, {"error": "Invalid JSON"})
+                return json_response(self, 400, {"error": "Invalid JSON", "request_id": self.request_id})
             citations = payload.get("citations", [])
             if not isinstance(citations, list) or len(citations) == 0:
                 return json_response(
@@ -78,12 +179,13 @@ class Handler(BaseHTTPRequestHandler):
                     400,
                     {
                         "error": "This system requires source citations. Please provide or ingest documents and reference at least one source.",
+                        "request_id": self.request_id,
                     },
                 )
             # Minimal format validation
             for c in citations:
                 if not isinstance(c, dict) or not c.get("doc") or not c.get("section"):
-                    return json_response(self, 400, {"error": "Invalid citation format. Expected {doc, section}."})
+                    return json_response(self, 400, {"error": "Invalid citation format. Expected {doc, section}.", "request_id": self.request_id})
             return json_response(
                 self,
                 200,
@@ -91,9 +193,10 @@ class Handler(BaseHTTPRequestHandler):
                     "message": "Answer would be generated here.",
                     "citations": citations,
                     "note": "MVP enforces citations; retrieval/generation is future work.",
+                    "request_id": self.request_id,
                 },
             )
-        return json_response(self, 404, {"error": "Not found"})
+        return json_response(self, 404, {"error": "Not found", "request_id": self.request_id})
 
 
 def main():

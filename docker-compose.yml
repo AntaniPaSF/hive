@@ -14,3 +14,20 @@ services:
     restart: unless-stopped
     volumes:
       - ./:/workspace:ro
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: hive-n8n
+    profiles: ["n8n"]
+    environment:
+      - N8N_PORT=${N8N_PORT:-5678}
+      - N8N_BASE_PATH=${N8N_BASE_PATH:-/n8n}
+    depends_on:
+      - app
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:${N8N_PORT:-5678}${N8N_BASE_PATH:-/n8n}"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped

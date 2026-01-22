@@ -1,16 +1,25 @@
-# Vector database storage (persistent data, not source)
-vectordb_storage/
-*.sqlite3
+# Universal
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.vscode/
+.idea/
 
 # Python
 __pycache__/
+*.pyc
 *.py[cod]
 *$py.class
-*.so
+.venv/
+venv/
+ENV/
+env/
+dist/
+*.egg-info/
 .Python
 build/
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/
@@ -22,27 +31,19 @@ var/
 wheels/
 pip-wheel-metadata/
 share/python-wheels/
-*.egg-info/
 .installed.cfg
 *.egg
 MANIFEST
 
-# Virtual environments
-.venv/
-venv/
-ENV/
-env/
-
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
 # OS files
 .DS_Store
 Thumbs.db
+
+# IDEs and swap files
+.vscode/
+.idea/
+*.swo
+*~
 
 # Benchmark results (keep .gitkeep for directory tracking)
 results/*.json
@@ -52,6 +53,7 @@ results/*.txt
 # Environment files
 .env
 .env.local
+.env.*
 
 # Docker
 .dockerignore
@@ -63,6 +65,18 @@ htmlcov/
 
 # Logs
 *.log
+coverage/
 
-# Distribution artifacts
-dist/
+# Build artifacts
+build/
+out/
+
+# Containers and images
+*.tar
+
+# Node (if present)
+node_modules/
+
+# Vector database storage (persistent data, not source)
+vectordb_storage/
+*.sqlite3
