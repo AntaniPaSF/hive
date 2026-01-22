@@ -55,6 +55,11 @@ results/*.txt
 .env.local
 .env.*
 
+# HR Data Pipeline - Generated files
+data/manifest.json
+download_model.py
+test_pipeline.py
+
 # Docker
 .dockerignore
 
