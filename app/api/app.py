@@ -37,6 +37,7 @@ from app.query.retriever import Retriever
 from app.ingestion.cli import IngestionPipeline
 from app.vectordb.client import ChromaDBClient
 from app.core.config import AppConfig
+from app.api.versioning import router as versioning_router
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +90,9 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    
+    # Include routers
+    app.include_router(versioning_router)
     
     # Exception handler
     @app.exception_handler(Exception)

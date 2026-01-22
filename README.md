@@ -39,6 +39,29 @@ This repository provides a self-contained, CPU-only local MVP skeleton for the C
   - Response caching layer
   - Comprehensive test runner
 
+**Phase 3 (P3): Version Control & Tracking** - ✅ Complete (All Tasks)
+- Task 3.1: Git-based Document Versioning ✅
+  - Repository initialization and management
+  - Commit, diff, and rollback operations
+  - Tag management and file retrieval
+- Task 3.2: Manifest Tracking System ✅
+  - Automatic change detection
+  - Version history storage
+  - Document-level change tracking
+- Task 3.3: Audit Trail System ✅
+  - Comprehensive action logging
+  - User session tracking
+  - Query and filter capabilities
+- Task 3.4: Versioning API Endpoints ✅
+  - 12 REST endpoints for version control
+  - Git operations, manifest history, and statistics
+- Task 3.5: Versioning Unit Tests ✅
+  - 30 comprehensive unit tests
+  - Full coverage of git, manifest, and audit
+- Task 3.6: Version Control CLI ✅
+  - Command-line interface for version management
+  - Interactive git, manifest, and audit commands
+
 ## Quickstart (Local)
 
 ### Using Docker (Legacy)
@@ -285,6 +308,102 @@ init_caches(query_cache_size=100, query_cache_ttl=3600)
 # Use in code
 cache = get_query_cache()
 cached = cache.get_query(question, provider, model, top_k)
+```
+
+## Version Control & Tracking (Phase 3)
+
+### Using the CLI
+
+```bash
+# Commit changes
+python -m app.versioning.cli commit -m "Added new HR policies" -a "Admin"
+
+# View commit history
+python -m app.versioning.cli history -n 10
+
+# Show differences
+python -m app.versioning.cli diff --from HEAD~1 --to HEAD
+
+# Rollback to version
+python -m app.versioning.cli rollback abc123 --hard
+
+# Repository status
+python -m app.versioning.cli status
+
+# Tag management
+python -m app.versioning.cli tag create v1.0.0 -m "Version 1.0.0"
+python -m app.versioning.cli tag list
+
+# Manifest history
+python -m app.versioning.cli manifest history -n 10
+python -m app.versioning.cli manifest stats
+
+# Audit trail
+python -m app.versioning.cli audit recent -n 20 -u admin
+python -m app.versioning.cli audit stats
+```
+
+### Using the API
+
+```bash
+# Commit changes
+curl -X POST http://localhost:8000/versions/commit \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Updated policies", "author": "Admin", "add_all": true}'
+
+# Get commit history
+curl http://localhost:8000/versions/history?max_count=10
+
+# Get diff
+curl "http://localhost:8000/versions/diff?from_commit=HEAD~1&to_commit=HEAD"
+
+# Rollback
+curl -X POST http://localhost:8000/versions/rollback \
+  -H "Content-Type: application/json" \
+  -d '{"commit_hash": "abc123", "hard": false}'
+
+# Repository status
+curl http://localhost:8000/versions/status
+
+# Manifest history
+curl http://localhost:8000/versions/manifest/history?limit=10
+
+# Get version control statistics
+curl http://localhost:8000/versions/stats
+```
+
+### Using Python API
+
+```python
+from app.versioning.git_manager import GitVersionManager
+from app.versioning.manifest_tracker import ManifestTracker
+from app.versioning.audit_trail import AuditTrail, ActionType, AuditLevel
+
+# Git operations
+git = GitVersionManager()
+git.init_repository()
+commit_hash = git.commit_changes("Updated docs", author="Admin", add_all=True)
+history = git.get_history(max_count=10)
+diff = git.get_diff(from_commit="HEAD~1", to_commit="HEAD")
+git.rollback(commit_hash="abc123", hard=False)
+
+# Manifest tracking
+tracker = ManifestTracker()
+version = tracker.record_version(commit_hash="abc123", changes_summary="Added docs")
+history = tracker.get_version_history(limit=10)
+changes = tracker.get_changes_since(version_id="abc123")
+
+# Audit trail
+audit = AuditTrail()
+audit.log_action(
+    action_type=ActionType.DOCUMENT_INGEST,
+    user="admin",
+    description="Ingested document",
+    level=AuditLevel.INFO,
+    resource_id="doc-123"
+)
+entries = audit.get_entries(user="admin", limit=50)
+activity = audit.get_user_activity(user="admin")
 ```
 
 ## Dev Container

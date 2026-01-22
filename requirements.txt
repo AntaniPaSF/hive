@@ -19,3 +19,7 @@ httpx>=0.26.0  # For TestClient
 
 # Testing & Optimization dependencies (Phase 2, Task 2.4)
 psutil>=5.9.0  # For memory profiling and resource monitoring
+
+# Version Control & Tracking dependencies (Phase 3)
+deepdiff>=6.7.0  # For detecting changes in manifest data
+click>=8.1.0  # For CLI interface
