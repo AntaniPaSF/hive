@@ -1,0 +1,20 @@
+# CODEOWNERS for GitHub repository
+
+# CI/CD workflows and scripts
+.github/ @hive-core/devops
+
+# Project specifications
+specs/ @hive-core/leads
+
+# Primary source code
+src/ @hive-core/developers
+
+# Tests
+tests/ @hive-core/qa
+
+# Configuration files
+*.yaml @hive-core/devops
+*.yml @hive-core/devops
+Dockerfile @hive-core/devops
+.env.example @hive-core/devops
+Makefile @hive-core/devops

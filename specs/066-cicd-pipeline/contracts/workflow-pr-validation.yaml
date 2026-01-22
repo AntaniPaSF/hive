@@ -1,0 +1,604 @@
+# Contract: PR Validation Workflow
+
+## Metadata
+name: "PR Validation"
+phase: "Phase 3 Implementation"
+description: "Validates every pull request with tests, linting, build, and benchmarks"
+trigger_events:
+  - pull_request: "opened, synchronize, reopened"
+  - pull_request_target: "security risks review"
+
+---
+
+## Inputs (Event Context from GitHub)
+
+```yaml
+github.event.pull_request:
+  base:
+    sha: string                 # Target commit (main branch)
+    ref: string                 # Target branch ("main")
+  head:
+    sha: string                 # PR commit
+    ref: string                 # PR branch (e.g., "feature/xyz")
+    repo:
+      full_name: string         # org/hive-core
+
+github.event.pull_request.title: string
+github.event.pull_request.body: string
+```
+
+---
+
+## Execution Model
+
+### Conditional Triggers
+
+Skip expensive jobs if only docs/config changed:
+
+```yaml
+if: |
+  !contains(github.event.pull_request.labels.*.name, 'skip-ci') &&
+  !(github.event.pull_request.title contains '[skip ci]')
+```
+
+Skip benchmarks for small code changes (heuristic):
+
+```yaml
+  # Run benchmarks only if:
+  # - Modified non-docs/config files
+  # - Or labeled 'benchmark-required'
+  if: |
+    github.event.pull_request.labels.*.name contains 'benchmark-required' ||
+    (PR changed files not in ['.md', '.yaml', '.env.example'])
+```
+
+---
+
+## Jobs (Parallel Execution Model)
+
+### Job: Setup
+**Runs First** (all subsequent jobs depend on this)
+
+**Purpose**: Prepare environment, cache restoration
+
+**Environment**:
+```yaml
+runs-on: ubuntu-latest (or ubuntu-24.04)
+timeout-minutes: 10
+```
+
+**Steps**:
+1. `actions/checkout@v4`
+   - Fetch PR branch code
+   - Output: `github.workspace` = `/home/runner/work/hive-core/hive-core`
+
+2. `actions/setup-python@v5`
+   - Python: 3.11
+   - Cache: pip
+   - Output: `python --version` = 3.11.x
+
+3. `docker/setup-buildx-action@v3`
+   - Enable Docker BuildKit
+   - Output: Docker buildx available
+
+4. `actions/cache@v3` (pip dependencies)
+   - Key: `pip-${{ runner.os }}-${{ hashFiles('requirements.txt') }}`
+   - Paths: `~/.cache/pip/`
+   - Expected hit rate: 95% (unless requirements.txt changed)
+
+**Outputs**:
+```yaml
+setup:
+  python-version: "3.11.9"
+  cache-hit: true|false
+  workspace: "/home/runner/work/hive-core/hive-core"
+```
+
+**Success Criteria**:
+- Python 3.11.x available
+- pip cache restored or updated
+- Docker buildx ready
+
+---
+
+### Job: Tests
+**Depends On**: `setup`
+
+**Purpose**: Run unit tests, measure coverage
+
+**Environment**:
+```yaml
+runs-on: ubuntu-latest
+timeout-minutes: 15
+```
+
+**Input Context**:
+```yaml
+# From GitHub API
+event.pull_request.head.sha: "abc123..."
+event.pull_request.base.sha: "def456..."  # main branch HEAD
+```
+
+**Steps**:
+1. Install dependencies (cached)
+   ```bash
+   pip install -r requirements.txt pytest pytest-cov
+   ```
+
+2. Run tests with coverage
+   ```bash
+   pytest tests/ \
+     --cov=src/ \
+     --cov-report=term \
+     --cov-report=json:coverage.json \
+     --junit-xml=test-results.xml \
+     -v
+   ```
+   - Timeout: 60s per test (soft), 5s per test (median)
+
+3. Parse results
+   ```bash
+   # Outputs to: test-results.xml, coverage.json
+   # Used by: GitHub summary, QualityCheck entity
+   ```
+
+4. Fail job if conditions met
+   ```yaml
+   if: |
+     coverage < 80% ||
+     failed_tests > 0
+   ```
+
+**Output Specification**:
+```yaml
+TestRun:
+  framework: "pytest"
+  total_tests: int                    # Parsed from XML
+  passed: int
+  failed: int
+  skipped: int
+  error: int
+  duration_seconds: float             # $(date +%s) delta
+  coverage:
+    lines: float                      # from coverage.json
+    branches: float
+    functions: float
+  failures: TestFailure[]             # from JUnit XML
+  junit_xml: "test-results.xml"       # Artifact path
+  coverage_report: "coverage.json"    # Artifact path
+
+# Example:
+TestRun:
+  framework: "pytest"
+  total_tests: 145
+  passed: 145
+  failed: 0
+  skipped: 0
+  coverage:
+    lines: 82.5
+    branches: 79.2
+    functions: 85.1
+```
+
+**Artifact Upload**:
+```yaml
+artifacts:
+  - name: "test-results"
+    path: |
+      test-results.xml
+      coverage.json
+    retention-days: 30
+```
+
+**Status Check** (GitHub):
+```
+GitHub creates: status check named "tests" (pass/fail)
+Used by: PR merge button (required check)
+```
+
+**Failure Handling**:
+```yaml
+if: failure()
+  - Parse JUnit XML for human-readable message
+  - Post as PR comment:
+    "❌ Tests failed: X failed, Y passed, Coverage Z%
+     Failed tests: [list top 3]"
+```
+
+---
+
+### Job: Lint
+**Depends On**: `setup`
+
+**Purpose**: Format check, linting, type checking, security scanning
+
+**Environment**:
+```yaml
+runs-on: ubuntu-latest
+timeout-minutes: 10
+```
+
+**Steps** (sequential within job):
+
+1. **Format Check** (black)
+   ```bash
+   black --check src/ tests/ 2>&1 | tee format.log
+   EXIT_CODE=$?
+   ```
+   - Output: `format.log`
+   - Success: EXIT_CODE = 0
+
+2. **Linting** (ruff)
+   ```bash
+   ruff check src/ tests/ --output-format=json > ruff.json 2>&1
+   ```
+   - Output: `ruff.json` (machine-readable)
+   - Parse for violations count
+
+3. **Type Checking** (mypy)
+   ```bash
+   mypy src/ --json > mypy.json 2>&1
+   ```
+   - Output: `mypy.json`
+   - Fail if errors > 0
+
+4. **Security Scan** (bandit)
+   ```bash
+   bandit -r src/ -f json -o bandit.json 2>&1
+   ```
+   - Output: `bandit.json`
+   - Fail if CRITICAL or HIGH found
+
+5. **Dependency Audit** (pip-audit)
+   ```bash
+   pip-audit --desc > pip-audit.json 2>&1
+   ```
+   - Output: `pip-audit.json`
+   - Fail if CRITICAL vulns found
+
+6. **Aggregate results**
+   ```bash
+   # Combine into single QualityCheck JSON
+   jq '{
+     formatting: { compliant: (exit_code_from_step_1 == 0) },
+     linting: { violations: (parse ruff.json | count) },
+     type_checking: { errors: (parse mypy.json | count) },
+     security: { bandit_issues: (parse bandit.json | count) },
+     dependencies: { vulnerabilities: (parse pip-audit.json | count) }
+   }' > quality-check.json
+   ```
+
+7. **Fail if critical issues**
+   ```yaml
+   if: |
+     format_exit_code != 0 ||
+     ruff_violations > 0 ||
+     mypy_errors > 0 ||
+     bandit_critical > 0 ||
+     pip_audit_critical > 0
+   ```
+
+**Output Specification**:
+```yaml
+QualityCheck:
+  formatting:
+    tool: "black"
+    compliant: bool
+    files_needing_format: ["src/main.py", ...]
+  
+  linting:
+    tool: "ruff"
+    violations: int
+    by_severity:
+      error: int
+      warning: int
+  
+  type_checking:
+    tool: "mypy"
+    errors: int
+    files_with_errors: ["src/parser.py:123", ...]
+  
+  security:
+    bandit_issues: int
+    by_severity:
+      critical: int
+      high: int
+      medium: int
+      low: int
+  
+  dependencies:
+    tool: "pip-audit"
+    vulnerabilities: int
+    critical_vuln: int
+```
+
+**Artifact Upload**:
+```yaml
+artifacts:
+  - name: "quality-check"
+    path: |
+      quality-check.json
+      format.log
+      ruff.json
+      mypy.json
+      bandit.json
+      pip-audit.json
+```
+
+---
+
+### Job: Build (conditional on Tests + Lint passing)
+**Depends On**: `tests`, `lint`
+
+**Purpose**: Build Docker image, push to registry
+
+**Environment**:
+```yaml
+runs-on: ubuntu-latest
+timeout-minutes: 20
+permissions:
+  packages: write  # Push to ghcr.io
+```
+
+**Environment Variables**:
+```yaml
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  TAG_PREFIX: ${{ github.event.pull_request.head.ref }}-
+```
+
+**Steps**:
+
+1. **Set up Docker BuildKit**
+   ```yaml
+   - uses: docker/setup-buildx-action@v3
+   ```
+
+2. **Generate image tags**
+   ```bash
+   # For PR: feature-abc1234567890 (first 10 chars of SHA)
+   # Avoid 'latest' tag for PRs (only main branch gets 'latest')
+   COMMIT_SHORT=$(git rev-parse --short HEAD)
+   IMAGE_TAG="${TAG_PREFIX}${COMMIT_SHORT}"
+   FULL_IMAGE="ghcr.io/org/hive-core:${IMAGE_TAG}"
+   echo "FULL_IMAGE=${FULL_IMAGE}" >> $GITHUB_ENV
+   ```
+
+3. **Authenticate to ghcr.io**
+   ```yaml
+   - uses: docker/login-action@v3
+     with:
+       registry: ghcr.io
+       username: ${{ github.actor }}
+       password: ${{ secrets.GITHUB_TOKEN }}  # Auto-provided
+   ```
+
+4. **Build and push (with caching)**
+   ```yaml
+   - uses: docker/build-push-action@v5
+     with:
+       context: .
+       file: ./Dockerfile
+       push: true  # Push to registry (false for local test)
+       tags: ${{ env.FULL_IMAGE }}
+       cache-from: type=gha
+       cache-to: type=gha,mode=max
+       build-args:
+         PYTHON_VERSION=3.11
+   ```
+   - BuildKit cache stored in GitHub Actions cache backend
+   - Typical cache hit: 85-95% (Python deps cached)
+
+5. **Extract image digest**
+   ```bash
+   # From build-push-action output
+   DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $FULL_IMAGE | cut -d'@' -f2)
+   echo "IMAGE_DIGEST=${DIGEST}" >> $GITHUB_ENV
+   ```
+
+6. **Run Trivy scan on pushed image**
+   ```bash
+   docker run --rm \
+     -v /var/run/docker.sock:/var/run/docker.sock \
+     aquasec/trivy image \
+     --severity CRITICAL,HIGH \
+     --exit-code 1 \
+     ghcr.io/org/hive-core:${IMAGE_TAG}
+   ```
+   - Fails if CRITICAL or HIGH vulnerabilities found
+
+**Output Specification**:
+```yaml
+Build:
+  image_name: "ghcr.io/org/hive-core:feature-abc1234"
+  size_bytes: 215000000
+  build_time_seconds: 95.2
+  registry: "ghcr.io"
+  push_status: "pushed"
+  digest: "sha256:abc123..."
+  scan_status: "clean"  # or "vulnerabilities"
+  cache_hit_rate: 0.87
+  layer_cache_hits: 18
+  layer_cache_misses: 3
+```
+
+**Artifact Output**:
+```yaml
+artifacts:
+  - name: "build-logs"
+    path: |
+      docker-build.log
+      trivy-scan.json
+    retention-days: 30
+```
+
+---
+
+### Job: Benchmark (conditional on Build success, may skip on docs-only)
+**Depends On**: `build`
+
+**Purpose**: Run full benchmark suite, enforce accuracy + citation gates
+
+**Environment**:
+```yaml
+runs-on: ubuntu-latest
+timeout-minutes: 30
+```
+
+**Steps**:
+
+1. **Spin up API container**
+   ```bash
+   docker run -d \
+     --name hive-api \
+     -p 8000:8000 \
+     -e ENV=test \
+     ${{ env.FULL_IMAGE }} \
+     python -m uvicorn main:app --host 0.0.0.0 --port 8000
+   ```
+
+2. **Wait for health check**
+   ```bash
+   for i in {1..30}; do
+     if curl -f http://localhost:8000/health; then
+       echo "API ready"
+       exit 0
+     fi
+     sleep 2
+   done
+   echo "API startup timeout"
+   exit 1
+   ```
+   - Maximum 60 seconds to reach /health ok
+
+3. **Run benchmark suite**
+   ```bash
+   python -m tests.benchmark.benchmark \
+     --api-url http://localhost:8000 \
+     --suite full \
+     --output-json benchmark-results.json \
+     --output-junit benchmark-results.xml
+   ```
+
+4. **Parse results and check gates**
+   ```bash
+   jq '.accuracy' benchmark-results.json  # Must be >= 80%
+   jq '.citations_accuracy' benchmark-results.json  # Must be 100%
+   
+   # Compare to main branch baseline (fetch from artifact or DB)
+   BASELINE=78.5  # from previous main build
+   CURRENT=$(jq '.accuracy' benchmark-results.json)
+   
+   if (( $(echo "$CURRENT < $BASELINE * 0.95" | bc -l) )); then
+     echo "REGRESSION: $CURRENT < $BASELINE * 0.95"
+     exit 1  # Fail job
+   fi
+   ```
+
+5. **Upload results artifact**
+   ```bash
+   # For PR comparison later
+   ```
+
+**Output Specification**:
+```yaml
+BenchmarkRun:
+  id: "uuid-12345"
+  suite_name: "full"
+  
+  total_tests: 50
+  passed: 43  # accuracy >= 80%
+  failed: 7   # accuracy < 80%
+  
+  accuracy: 86.0
+  citations_accuracy: 100.0
+  
+  latency:
+    p50_ms: 320.5
+    p95_ms: 487.2
+    p99_ms: 612.8
+    max_ms: 891.3
+  
+  baseline_accuracy: 78.5
+  regression_detected: false  # 86.0 >= 78.5 * 0.95
+  
+  full_report: "benchmark-results.json"
+```
+
+**Failure Scenarios**:
+```yaml
+if: accuracy < 80%
+  - Post PR comment: "❌ Accuracy dropped to 86%, must be >= 80%"
+  - Set status: FAILURE
+
+if: citations_accuracy < 100%
+  - Post PR comment: "❌ X questions missing citations"
+  - Set status: FAILURE
+
+if: regression_detected
+  - Post PR comment: "❌ Regression detected: 86% vs baseline 78.5%"
+  - Set status: FAILURE
+
+if: latency.p95_ms > 1000
+  - Post PR comment: "⚠️ P95 latency 487ms (normal), not blocking"
+  - Set status: SUCCESS (informational only)
+```
+
+---
+
+## Summary Output
+
+After all jobs complete, GitHub automatically collects results:
+
+### PR Comment (Posted Automatically)
+
+```
+✅ PR Validation Complete
+
+### Test Results
+- Passed: 145/145 ✅
+- Coverage: 82.5% ✅
+- Duration: 68.5s
+
+### Code Quality
+- Formatting: ✅
+- Linting: 0 issues ✅
+- Type Checking: 0 errors ✅
+- Security: 0 critical ✅
+- Dependencies: 0 critical CVEs ✅
+
+### Build
+- Image Size: 215 MB
+- Build Time: 95.2s
+- Cache Hit: 87%
+- Trivy Scan: ✅ Clean
+
+### Benchmarks
+- Accuracy: 86.0% ✅
+- Citations: 100% ✅
+- P95 Latency: 487ms ✅
+- Regression: None ✅
+
+**Ready to Merge** ✅
+```
+
+Or if any fail:
+
+```
+❌ PR Validation Failed
+
+### Failures
+- Accuracy: 76% (need >= 80%)
+- Citations: 85% (need 100%)
+
+Regression: 76% vs baseline 78.5%
+Please fix and re-push.
+```
+
+---
+
+## Related Contracts
+- [workflow-main-build.yaml](workflow-main-build.yaml)
+- [workflow-benchmark.yaml](workflow-benchmark.yaml)
+- [data-model.md](../data-model.md) - TestRun, QualityCheck, BenchmarkRun, Build

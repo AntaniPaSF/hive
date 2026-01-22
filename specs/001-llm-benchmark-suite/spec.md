@@ -55,6 +55,23 @@ QA engineers and developers need to run the benchmark suite locally with a singl
 
 ---
 
+### User Story 3.1 - CI/CD Pipeline Integration (Priority: P1) **[NEW - Session 2026-01-22]**
+
+The benchmark suite must integrate seamlessly into the CI/CD pipeline to automatically validate LLM responses on every pull request. Tests run against a mock LLM implementation for fast feedback during development, with the option to run against real LLM endpoints for comprehensive benchmarking.
+
+**Why this priority**: Directly enforces constitution principles by ensuring every code change is validated for accuracy and citation coverage before merging. Prevents regressions from reaching production.
+
+**Independent Test**: Can be tested by creating a PR with intentional accuracy/citation failures and verifying CI blocks the merge. Fix the issues and verify CI passes.
+
+**Acceptance Scenarios**:
+
+1. **Given** a PR is created, **When** CI/CD pipeline runs, **Then** the benchmark test suite executes automatically with 13 test cases validating accuracy, citations, consistency, and performance
+2. **Given** all tests pass, **When** CI completes, **Then** green checkmark appears and merge is allowed
+3. **Given** any test fails, **When** CI completes, **Then** red X appears, PR comments show failure details, and merge is blocked
+4. **Given** benchmark tests run in CI context, **When** mock LLM is used, **Then** tests complete in under 1 second with reproducible results
+
+---
+
 ### User Story 4 - Citation Quality Validation (Priority: P2)
 
 QA engineers need to verify that citations are not just present, but actually point to valid source documents and sections. The benchmark suite should validate that cited sources exist in the knowledge base and are relevant to the question asked.
@@ -186,3 +203,46 @@ QA engineers need to detect when LLM accuracy degrades over time. The benchmark 
 - Q: What output format should the benchmark report use (FR-006)? → A: Both human-readable text summary (for CLI output) and JSON file (for automation/CI)
 - Q: Where should benchmark results be stored? → A: Store in `results/` directory with timestamped filenames (e.g., `results/benchmark_2026-01-21_14-30-15.json`)
 - Q: What timeout should be used for API requests (FR-011)? → A: 5 seconds per request
+
+### Session 2026-01-22 - CI/CD Integration Implementation
+
+**Status**: Implemented as part of 066-cicd-pipeline branch
+
+**Changes Made**:
+1. Created `tests/test_llm_benchmark.py` with 13 pytest test cases (282 lines)
+2. Integrated LLM benchmark tests into `.github/workflows/pr-validation.yml`
+3. Tests run automatically on every PR with full coverage reporting
+4. Mock LLM implementation for fast CI/CD execution (<1 second)
+
+**Test Suite Breakdown**:
+- **TestLLMBenchmarkAccuracy** (3 tests): Validates answers against 3 benchmark questions (Q001-Q003)
+- **TestLLMBenchmarkCitations** (3 tests): Ensures citations are present and non-empty
+- **TestLLMBenchmarkConsistency** (2 tests): Validates answer consistency and required fields
+- **TestLLMBenchmarkPerformance** (2 tests): Measures response time (<1.0s) and batch processing
+- **TestBenchmarkSuiteIntegration** (3 tests): End-to-end validation and coverage checks
+
+**CI/CD Workflow**:
+```
+PR Created → tests job:
+  ├── Run pytest tests/ (includes 17 total tests: 4 basic + 13 LLM benchmark)
+  ├── Generate coverage reports (pytest-cov)
+  ├── Upload to Codecov
+  └── Fail if any test fails → Block merge
+  
+  → build job (only if tests pass):
+  ├── Build Docker image
+  └── Verify build succeeds
+```
+
+**Implementation Notes**:
+- MVP uses mock LLM for fast CI/CD (0.03s execution time)
+- Full benchmarking with real LLM API available via `tests/benchmark/benchmark.py`
+- Ground truth exists at `tests/benchmark/ground_truth.yaml` (20+ questions)
+- Tests auto-scale: add questions to YAML, expand MockLLMImplementation responses
+- Can switch to real API by updating MockLLMImplementation or environment config
+
+**Next Steps (Post-MVP)**:
+- Expand test coverage from 3 to 20+ questions
+- Add citation validation against knowledge base manifest (User Story 4)
+- Implement regression detection with baseline storage (User Story 6)
+- Add support for different LLM models/endpoints for comparative benchmarking
