@@ -215,3 +215,40 @@ Team members receive notifications when CI/CD pipelines fail, builds complete, o
 - **GitOps workflows**: No ArgoCD, Flux, or similar GitOps tooling
 - **SonarQube integration**: Advanced code quality analysis beyond linting is post-MVP
 - **Automated changelog generation**: Manual release notes, no semantic-release automation initially
+
+## Clarifications
+
+### Session 2026-01-22 - LLM Benchmark Integration
+
+**Status**: Integrated with 001-llm-benchmark-suite implementation
+
+**How Benchmarks Run in CI/CD**:
+1. **PR Validation Workflow** (`.github/workflows/pr-validation.yml`):
+   - Tests job runs: `pytest tests/` which includes 17 tests (4 basic + 13 LLM benchmark)
+   - Tests must all pass for Docker build to proceed
+   - Coverage reports generated and uploaded to Codecov
+   - Execution time: <1 second for mock LLM tests, <10 minutes for full suite
+
+2. **Test Suite Structure** (`tests/test_llm_benchmark.py`):
+   - MockLLMImplementation provides fast simulated responses
+   - 13 pytest test cases validating accuracy, citations, consistency, performance
+   - BenchmarkQuestion model supports arbitrary number of test questions
+   - Can scale from 3 questions (MVP) to 20+ questions (full implementation)
+
+3. **Configuration**:
+   - Uses fuzzy matching with 0.8 Levenshtein threshold
+   - Citations must be present (non-empty list) on all responses
+   - Response time measured in mock context (<1.0s requirement)
+   - Can configure real LLM API endpoint for comprehensive benchmarking
+
+4. **Relationship to 066-cicd-pipeline**:
+   - FR-005 ("CI/CD MUST run benchmark suite") is implemented via pytest integration
+   - Mock LLM enables fast PR feedback without waiting for real API inference
+   - Full benchmarking available separately via `python tests/benchmark/benchmark.py --api-url <endpoint>`
+   - Both share same ground truth dataset (`tests/benchmark/ground_truth.yaml`)
+
+5. **Migration Path**:
+   - MVP (current): Mock LLM in CI/CD, fast <1 second feedback
+   - Phase 2: Expand to all 20+ ground truth questions
+   - Phase 3: Optional real LLM benchmarking for comprehensive validation
+   - Phase 4: Add regression detection and historical tracking
