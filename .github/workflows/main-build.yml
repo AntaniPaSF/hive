@@ -37,8 +37,12 @@ jobs:
         id: meta
         run: |
           COMMIT_SHORT=$(git rev-parse --short HEAD)
+          MAIN_TAG="main-${COMMIT_SHORT}"
+          IMAGE_NAME_LOWER=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
+          
           echo "tag=main-${COMMIT_SHORT}" >> $GITHUB_OUTPUT
-          echo "image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main-${COMMIT_SHORT}" >> $GITHUB_OUTPUT
+          echo "full_image=${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}:${MAIN_TAG}" >> $GITHUB_OUTPUT
+          echo "full_image_latest=${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}:latest" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -47,8 +51,8 @@ jobs:
           file: ./Dockerfile
           push: ${{ github.event_name == 'push' }}
           tags: |
-            ${{ steps.meta.outputs.image }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ steps.meta.outputs.full_image }}
+            ${{ steps.meta.outputs.full_image_latest }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
