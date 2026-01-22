@@ -1,8 +1,10 @@
 name: Main Build
-# Builds Docker image on main branch pushes
+# Builds Docker image on main branch and PRs to main
 
 on:
   push:
+    branches: [main]
+  pull_request:
     branches: [main]
 
 env:
@@ -43,15 +45,19 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          push: true
+          push: ${{ github.event_name == 'push' }}
           tags: |
             ${{ steps.meta.outputs.image }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Print build info
+      - name: Print build status
         run: |
-          echo "✅ Docker image built and pushed"
-          echo "   Image: ${{ steps.meta.outputs.image }}"
-          echo "   Latest: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "✅ Docker image built and pushed"
+            echo "   Image: ${{ steps.meta.outputs.image }}"
+            echo "   Latest: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+          else
+            echo "✅ Docker image built successfully (PR test - not pushed)"
+          fi
