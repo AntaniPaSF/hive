@@ -5,16 +5,16 @@
 
 ## Summary
 
-Build a data ingestion pipeline that converts the provided HR policy PDF into a searchable vector database for RAG retrieval. The pipeline will chunk documents optimally, generate embeddings, and store them in ChromaDB. Additionally, augment the knowledge base with relevant external HR data from Kaggle/HuggingFace, ensuring no contradictions or duplicates. All source documents will be version-controlled in git for reproducibility.
+Build a data ingestion pipeline that converts the provided HR policy PDF into a searchable vector database for text-based retrieval. The pipeline will chunk documents optimally and store them in ChromaDB in text-only mode (no embeddings). All source documents will be version-controlled in git for reproducibility.
 
-**Technical Approach**: Python-based ETL pipeline using PyPDF2 for extraction, sentence-transformers for embeddings, and ChromaDB for vector storage. Implement semantic validation to detect contradictions and duplicates before ingestion. Containerize via Docker following existing project patterns.
+**Technical Approach**: Python-based ETL pipeline using PyPDF2 for extraction, tiktoken for token counting, and ChromaDB for text storage. No external data sources required - pipeline operates exclusively with PDF content.
 
 ## Technical Context
 
 **Language/Version**: Python 3.11+ (from existing Dockerfile)  
-**Primary Dependencies**: PyPDF2 3.0.1, ChromaDB 0.4.22, sentence-transformers 2.2.2, Kaggle API 1.5.16, HuggingFace Hub 0.20.2  
-**Storage**: ChromaDB (local SQLite-based vector database), Git repository for source documents  
-**Testing**: pytest with contract/integration/unit test structure (existing pattern)  
+**Primary Dependencies**: PyPDF2 3.0.1, ChromaDB 0.4.22, tiktoken 0.5.0, numpy<2.0 (ChromaDB compatibility), pytest 7.0+  
+**Storage**: ChromaDB (local SQLite-based text storage), Git repository for source documents  
+**Testing**: pytest with unit test structure  
 **Target Platform**: Docker containers on Linux/macOS, CPU-only hardware (no GPU requirement)  
 **Project Type**: Single project (data pipeline extending existing app/ structure)  
 **Performance Goals**: 

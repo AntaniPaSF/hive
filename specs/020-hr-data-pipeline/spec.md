@@ -3,7 +3,7 @@
 **Feature Branch**: `020-hr-data-pipeline`  
 **Created**: January 21, 2026  
 **Status**: Draft  
-**Input**: User description: "Create ingestion pipeline for provided HR policy PDF (docs → embeddings → vector DB), augment with relevant Kaggle/HuggingFace data aligned to PDF topics without contradictions or duplicates, chunk documents for optimal retrieval, version control knowledge base."
+**Input**: User description: "Create ingestion pipeline for provided HR policy PDF (docs → text storage → vector DB), chunk documents for optimal retrieval, version control knowledge base."
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -23,20 +23,11 @@ A data engineer needs to ingest the provided HR policy PDF document into the sys
 
 ---
 
-### User Story 2 - Augment with External HR Data (Priority: P2)
+### User Story 2 - Augment with External HR Data (Priority: REMOVED)
 
-A data engineer needs to enrich the knowledge base by sourcing relevant HR policy information from Kaggle/HuggingFace datasets that complement the PDF content without creating contradictions or semantic duplicates.
+**Status**: REMOVED - Pipeline is PDF-only per user requirements. All data comes from the HR policy PDF document.
 
-**Why this priority**: Expands knowledge coverage while maintaining Accuracy - the PDF document serves as the authoritative source and external data must align with it. Supports comprehensive answers without compromising correctness.
-
-**Independent Test**: Can be tested by comparing external data chunks against PDF topics, verifying semantic similarity for relevance and detecting contradictions or duplicates before ingestion.
-
-**Acceptance Scenarios**:
-
-1. **Given** PDF document is ingested and topic extraction is complete, **When** sourcing external data, **Then** only documents matching PDF topics (via semantic similarity >0.75) are retrieved from Kaggle/HuggingFace
-2. **Given** external document is retrieved, **When** checking for contradictions, **Then** any content that contradicts PDF policy statements is flagged and excluded from ingestion
-3. **Given** external document passes contradiction check, **When** checking for duplicates, **Then** chunks with semantic similarity >0.85 to existing PDF chunks are marked as duplicates and skipped
-4. **Given** external data passes all validation, **When** ingesting to vector database, **Then** chunks are labeled with source metadata (kaggle/huggingface) and linked to related PDF topics
+**Original Scope**: External data augmentation from Kaggle/HuggingFace datasets was planned but removed. The system now operates exclusively with PDF content.
 
 ---
 
@@ -90,33 +81,33 @@ A data engineer needs to track changes to the knowledge base over time, includin
 
 - **FR-001**: System MUST accept PDF documents as input and extract text content while preserving structural information (headings, sections)
 - **FR-002**: System MUST store extracted document content in markdown format within the `/data` folder in the git repository
-- **FR-003**: System MUST organize data by source with subdirectories: `/data/pdf/` for the authoritative HR policy document, `/data/kaggle/` for Kaggle-sourced documents, `/data/huggingface/` for HuggingFace-sourced documents
-- **FR-004**: System MUST extract topics from the PDF document to guide external data sourcing (e.g., vacation policy, expense reimbursement, remote work guidelines)
-- **FR-005**: System MUST retrieve external documents from Kaggle/HuggingFace only when semantic similarity to PDF topics exceeds 0.75 threshold
-- **FR-006**: System MUST detect contradictions between external content and PDF content using semantic analysis and exclude contradictory information
-- **FR-007**: System MUST identify semantic duplicates between external chunks and PDF chunks using similarity threshold of 0.85 and skip duplicate ingestion
+- **FR-003**: System MUST organize data by source with subdirectories: `/data/pdf/` for the authoritative HR policy document (sole data source)
+- **FR-004**: (Removed - topic extraction not required for PDF-only pipeline)
+- **FR-005**: (Removed - external data retrieval not required)
+- **FR-006**: (Removed - contradiction detection not required for PDF-only pipeline)
+- **FR-007**: (Removed - duplicate detection between sources not required)
 - **FR-008**: System MUST chunk documents into retrievable segments with configurable size (default 512 tokens) and overlap (default 50 tokens)
-- **FR-009**: System MUST generate vector embeddings for each chunk using a specified embedding model
-- **FR-010**: System MUST store chunks and embeddings in a vector database (ChromaDB or Qdrant)
-- **FR-011**: System MUST include metadata with each chunk: source document, source type (pdf/kaggle/huggingface), page number, section title, chunk index, timestamp, related PDF topic
-- **FR-012**: System MUST provide a data ingestion script that processes the PDF first, then external sources with validation
+- **FR-009**: (Removed - vector embeddings not used in text-only mode)
+- **FR-010**: System MUST store chunks in a vector database (ChromaDB) for text-based retrieval
+- **FR-011**: System MUST include metadata with each chunk: source document, source type (pdf), page number, section title, chunk index, timestamp
+- **FR-012**: System MUST provide a data ingestion script that processes PDF documents
 - **FR-013**: System MUST support incremental ingestion (only process new or modified documents)
-- **FR-014**: System MUST validate document content before ingestion (file readability, format validation, encoding check, contradiction detection, duplicate detection)
-- **FR-015**: System MUST export a data schema document defining chunk structure, metadata fields, embedding dimensions, and validation rules for use by RAG engineers
-- **FR-016**: System MUST log all ingestion operations including success/failure status, processing time, validation results (contradictions found, duplicates skipped), and error details
-- **FR-017**: System MUST maintain a manifest file in `/data` listing all ingested documents with checksums, ingestion timestamps, source type, and related PDF topics
+- **FR-014**: System MUST validate document content before ingestion (file readability, format validation, encoding check)
+- **FR-015**: System MUST export a data schema document defining chunk structure, metadata fields for use by RAG engineers
+- **FR-016**: System MUST log all ingestion operations including success/failure status, processing time, and error details
+- **FR-017**: System MUST maintain a manifest file in `/data` listing all ingested documents with checksums, ingestion timestamps, and source type
 - **FR-018**: System MUST handle errors gracefully (skip corrupted files, continue processing remaining documents)
-- **FR-019**: System MUST preserve document versioning through git commits with descriptive commit messages including validation statistics
+- **FR-019**: System MUST preserve document versioning through git commits with descriptive commit messages
 
 ### Key Entities
 
-- **HR Document**: Represents an HR policy document (PDF or external source). Key attributes: filename, source (pdf/kaggle/huggingface), file size, page count, language, last modified date, checksum, related PDF topics.
+- **HR Document**: Represents an HR policy document (PDF only). Key attributes: filename, source (pdf), file size, page count, language, last modified date, checksum.
 
-- **Document Chunk**: Represents a segment of text from an HR document optimized for retrieval. Key attributes: chunk text content, chunk index within document, token count, overlap tokens, embedding vector (dimensions based on model), source type.
+- **Document Chunk**: Represents a segment of text from an HR document optimized for retrieval. Key attributes: chunk text content, chunk index within document, token count, overlap tokens, source type.
 
-- **Chunk Metadata**: Information associated with each chunk for retrieval context. Key attributes: source document reference, source type (pdf/kaggle/huggingface), page number(s), section title/heading, creation timestamp, embedding model name/version, related PDF topic, validation status (passed contradiction check, duplicate check).
+- **Chunk Metadata**: Information associated with each chunk for retrieval context. Key attributes: source document reference, source type (pdf), page number(s), section title/heading, creation timestamp.
 
-- **Vector Database Entry**: Represents a stored chunk with its embedding. Key attributes: unique chunk ID, embedding vector, metadata dictionary, similarity scores (computed at query time), source hierarchy (pdf=authoritative, external=supplementary).
+- **Vector Database Entry**: Represents a stored chunk in text-only mode. Key attributes: unique chunk ID, metadata dictionary, text content for keyword search.
 
 - **Data Manifest**: Tracks all documents in the knowledge base. Key attributes: document path, source type, checksum (SHA-256), ingestion timestamp, chunk count, related PDF topics, validation results, total database size.
 
