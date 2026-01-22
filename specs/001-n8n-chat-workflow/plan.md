@@ -53,15 +53,14 @@ specs/001-n8n-chat-workflow/
 ### Source Code (repository root)
 
 ```text
-compose/
-├── docker-compose.yml           # base compose (includes backend + n8n)
-└── docker-compose.runtime.yml   # ports overlay (env-configurable)
+docker-compose.yml              # base compose (includes backend + n8n)
+docker-compose.runtime.yml      # ports overlay (env-configurable)
 
 app/
-└── server.py                    # stdlib HTTP server exposing /api/chat
+└── server.py                   # stdlib HTTP server exposing /api/chat
 
 specs/
-└── 001-n8n-chat-workflow/      # docs + contracts for this feature
+└── 001-n8n-chat-workflow/     # docs + contracts for this feature
 ```
 
 **Structure Decision**: Use containerized backend (`app/server.py`) and N8N, orchestrated via compose; env-only ports; internal service DNS for inter-service calls.

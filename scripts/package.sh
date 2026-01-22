@@ -19,16 +19,22 @@ docker save "${IMAGE_NAME}:${VERSION}" -o "${TAR_PATH}"
 
 # Checksums and manifest
 SHA256=$(sha256sum "${TAR_PATH}" | awk '{print $1}')
-MANIFEST_PATH="${DIST_DIR}/${IMAGE_NAME}-${VERSION}-manifest.json"
+CHECKSUMS_PATH="${DIST_DIR}/checksums.txt"
+echo "${SHA256}  $(basename "${TAR_PATH}")" > "${CHECKSUMS_PATH}"
+
+MANIFEST_PATH="${DIST_DIR}/manifest.json"
 cat > "${MANIFEST_PATH}" <<JSON
 {
   "name": "${IMAGE_NAME}",
   "version": "${VERSION}",
-  "imageTar": "$(basename "${TAR_PATH}")",
-  "sha256": "${SHA256}",
-  "created": "$(date -Iseconds)"
+  "created": "$(date -Iseconds)",
+  "files": [
+    { "path": "$(basename "${TAR_PATH}")", "sha256": "${SHA256}" },
+    { "path": "checksums.txt", "sha256": "$(sha256sum "${CHECKSUMS_PATH}" | awk '{print $1}')" }
+  ]
 }
 JSON
 
 echo "[package] Artifact: ${TAR_PATH}"
 echo "[package] Manifest: ${MANIFEST_PATH}"
+echo "[package] Checksums: ${CHECKSUMS_PATH}"

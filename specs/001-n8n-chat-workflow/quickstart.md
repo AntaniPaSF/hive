@@ -66,17 +66,33 @@ Sessions are ephemeral with a 10-minute TTL.
 - Structured JSON logs include `request_id` for traceability
 
 ## Performance
-- Measure chat API latency (p50/p95 target: p95 < 10s):
+ - Measure chat API latency (p50/p95 target: p95 < 10s). The script can enforce a merge gate (non-zero exit) when p95 ≥ 10s:
 
 ```bash
 export APP_PORT=${APP_PORT:-8080}
-MEASURE_LATENCY=1 COUNT=20 bash scripts/verify.sh
+MEASURE_LATENCY=1 ENFORCE_GATE=1 COUNT=20 bash scripts/verify.sh
 ```
 
-The script runs N requests to `/api/chat` and prints p50/p95.
+The script runs N requests to `/api/chat`, prints p50/p95, and exits non-zero if the gate fails.
 
 ## Packaging (offline)
-- Use existing packaging scripts to build and save images as tar; run offline via `docker load`.
+ - Use packaging scripts to build and save images as tar. Artifacts include a tarball, a manifest JSON, and SHA256 checksums for integrity.
+
+### Artifacts
+
+```text
+dist/
+├── hive-assistant-<version>.tar
+├── manifest.json              # { name, version, files: [ { path, sha256 } ] }
+└── checksums.txt              # sha256sum outputs for all artifacts
+```
+
+Generate and verify checksums:
+
+```bash
+make package
+sha256sum -c dist/checksums.txt
+```
 
 ### Offline Run
 
@@ -109,7 +125,25 @@ curl -X POST \
 ```
 
 ## Edge Cases
-- **Long messages**: Prompts longer than ~4k characters may be rejected or truncated; keep messages concise.
+- **Long messages**: Prompts longer than 4096 bytes are rejected with HTTP 413 and a friendly guidance message; the workflow shows an inline banner and does not process the request.
 - **Port conflicts**: If `APP_PORT` or `N8N_PORT` are already in use, choose different ports before starting.
 - **Missing or inactive workflow**: If `POST /webhook/chat` returns 404, import the workflow JSON and activate it; for testing without activation, use `/webhook-test/chat` after clicking "Execute workflow".
-- **Unhealthy container status**: The app image may lack `curl`; health checks can show `unhealthy` while endpoints still work.
+ - **Unhealthy container status**: The app image may lack `curl`; health checks can show `unhealthy` while endpoints still work.
+
+## Env-only Configuration Test
+- Vary `N8N_PORT` and `N8N_BASE_PATH` to confirm no hardcoded defaults:
+
+```bash
+export N8N_PORT=5679
+export N8N_BASE_PATH=/flows
+docker compose -f docker-compose.yml -f docker-compose.runtime.yml up -d
+# Open N8N at the new base path
+xdg-open "http://localhost:${N8N_PORT}${N8N_BASE_PATH}" 2>/dev/null || true
+```
+
+## Self-Contained Verification
+- Optionally verify no external paid APIs are referenced in code:
+
+```bash
+SELF_CONTAINED_VERIFY=1 bash scripts/verify.sh
+```

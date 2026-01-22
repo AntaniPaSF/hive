@@ -7,4 +7,4 @@ services:
 
   n8n:
     ports:
-      - "${N8N_PORT:?N8N_PORT must be set}:${N8N_PORT:-5678}"
+      - "${N8N_PORT:?N8N_PORT must be set}:5678"

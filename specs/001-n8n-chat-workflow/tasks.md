@@ -5,9 +5,11 @@ Branch: 001-n8n-chat-workflow
 Spec: specs/001-n8n-chat-workflow/spec.md
 Plan: specs/001-n8n-chat-workflow/plan.md
 
+> Canonical workflow export: `specs/001-n8n-chat-workflow/workflow.fixed.json` is the source of truth for imports.
+
 ## Phase 1: Setup (Project Initialization)
 
- [x] T001 Create N8N workflow export file scaffold at specs/001-n8n-chat-workflow/workflow.json
+ [x] T001 Create N8N workflow export file scaffold at specs/001-n8n-chat-workflow/workflow.fixed.json
  [x] T002 Define environment placeholders in README for N8N_PORT and N8N_BASE_PATH at README.md
  [x] T003 Add N8N service to compose with env-only ports at docker-compose.yml
  [x] T004 Add runtime ports overlay for N8N at docker-compose.runtime.yml
@@ -25,12 +27,13 @@ Plan: specs/001-n8n-chat-workflow/plan.md
 Goal: User can submit a message via N8N UI, backend returns cited answer; UI enforces citations.
 Independent Test: Trigger workflow; response renders answer + citations; errors show inline banner.
 
-- [x] T010 [US1] Create N8N Webhook Trigger node under base path at specs/001-n8n-chat-workflow/workflow.json
-- [x] T011 [P] [US1] Configure HTTP Request node to call backend via internal DNS at specs/001-n8n-chat-workflow/workflow.json
-- [x] T012 [US1] Map request/response schema to OpenAPI fields at specs/001-n8n-chat-workflow/workflow.json
-- [x] T013 [US1] Implement UI path to render answer + citations at specs/001-n8n-chat-workflow/workflow.json
-- [x] T014 [US1] Add citation enforcement: show banner if citations missing at specs/001-n8n-chat-workflow/workflow.json
-- [x] T015 [P] [US1] Propagate request_id across nodes and logs at specs/001-n8n-chat-workflow/workflow.json
+- [x] T010 [US1] Create N8N Webhook Trigger node under base path at specs/001-n8n-chat-workflow/workflow.fixed.json
+- [x] T011 [P] [US1] Configure HTTP Request node to call backend via internal DNS at specs/001-n8n-chat-workflow/workflow.fixed.json
+- [x] T012 [US1] Map request/response schema to OpenAPI fields at specs/001-n8n-chat-workflow/workflow.fixed.json
+- [x] T013 [US1] Implement UI path to render answer + citations at specs/001-n8n-chat-workflow/workflow.fixed.json
+- [x] T014 [US1] Add citation enforcement: show banner if citations missing at specs/001-n8n-chat-workflow/workflow.fixed.json
+- [x] T015 [P] [US1] Propagate request_id across nodes and logs at specs/001-n8n-chat-workflow/workflow.fixed.json
+ - [x] T042 [US1] Set HTTP Request timeout=5000ms and retries=5 in specs/001-n8n-chat-workflow/workflow.fixed.json
 - [x] T016 [US1] Document webhook URL and UI path in quickstart at specs/001-n8n-chat-workflow/quickstart.md
 - [x] T017 [US1] Validate acceptance scenarios via curl examples at specs/001-n8n-chat-workflow/quickstart.md
 
@@ -60,7 +63,13 @@ Independent Test: Single command brings services up; health OK; UI path works of
 
 ## Final Phase: Polish & Cross-Cutting Concerns
 
- - [x] T030 Improve error messages and banner UX text at specs/001-n8n-chat-workflow/workflow.json
+ - [x] T030 Improve error messages and banner UX text at specs/001-n8n-chat-workflow/workflow.fixed.json
+ - [ ] T036 Validate clickable citations (FR-013): Ensure N8N UI renders links to `/docs/<doc>#<section>` and backend serves docs anchors.
+ - [ ] T037 Enforce performance gate: extend `scripts/verify.sh` to exit non-zero if p95 ≥ 10s; document in quickstart; gate merges.
+ - [ ] T038 Define offline packaging artifacts: produce tarball + manifest.json with SHA256 checksums in `scripts/package.sh`; document verification steps.
+ - [ ] T039 Test env-only N8N config: vary `N8N_PORT` and `N8N_BASE_PATH` and verify endpoints; add steps in quickstart.
+ - [ ] T040 Verify self-contained constraints: add check in `scripts/verify.sh` to detect external paid API usage (OpenAI/Anthropic/Cohere) and fail.
+ - [ ] T041 Resolve prerequisites prefix collision: enhance `.specify/scripts/bash/check-prerequisites.sh` to accept explicit feature selection or adjust docs.
  - [x] T031 Add log correlation guide in README at README.md
  - [x] T032 Add edge case docs (long messages, port conflicts) at specs/001-n8n-chat-workflow/quickstart.md
  - [x] T033 Add minimal RAG stub contract and sample data at specs/001-n8n-chat-workflow/contracts/openapi.yaml

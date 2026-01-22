@@ -12,6 +12,14 @@
 - Q3 Error Display: Inline banner in the workflow's UI path
 - Q4 Backend URL Resolution: Use Docker internal service DNS (e.g., `http://app:${INTERNAL_PORT}`) within Compose; avoid localhost coupling.
 
+### Session 2026-01-21
+
+- Q: What is the authentication posture for the local MVP? → A: No auth; bind to localhost only.
+- Q: What is the maximum number of citations to display? → A: Max 5 citations per answer.
+- Q: What is the session TTL for continuity? → A: 10 minutes TTL (ephemeral).
+- Q: What is the error handling status/shape for validation failures? → A: 400 Bad Request + JSON `{ error_code, message, request_id }`.
+ - Q: What is the backend call timeout/retry policy from N8N? → A: 5s timeout; up to 5 retries.
+
 ## User Scenarios & Testing *(mandatory)*
 
 <!--
@@ -85,7 +93,7 @@ As a contributor, I can start N8N + backend + RAG stub with one command and veri
 
 - Backend unavailable or returns error: N8N displays a clear actionable message, logs structured error details, and retries are documented.
 - Missing citations: Workflow path rejects answer display and shows a citation-required message.
-- Long messages: Document sensible limits and behavior (truncate or reject with guidance).
+- Long messages: Max prompt size is 4096 bytes. Backend responds with HTTP 413 and a friendly guidance message; N8N renders an inline banner and does not process the request. Acceptance: When a prompt exceeds 4096 bytes, the workflow shows guidance and no answer is returned.
 - Port conflicts: All services allow env-only port overrides without code changes.
 
 ## Requirements *(mandatory)*
@@ -112,6 +120,11 @@ As a contributor, I can start N8N + backend + RAG stub with one command and veri
 
 - **FR-012**: N8N MUST call the backend via internal service DNS (e.g., `app:${INTERNAL_PORT}`) inside the Compose network; no reliance on host-localhost ports for intra-service calls.
  - **FR-013**: Citations must render as clickable links that navigate to the original source document and section anchor.
+ - **FR-014**: For the local MVP, no authentication is required; N8N and backend bind to localhost only. External exposure is out of scope.
+ - **FR-015**: The workflow UI displays at most 5 citations per answer; if more citations are present, only the first five are rendered.
+ - **FR-016**: Session context TTL is 10 minutes; sessions expire after inactivity and new requests start a fresh context.
+ - **FR-017**: Validation errors use `400 Bad Request` with JSON `{ error_code, message, request_id }`. Over-limit prompts use `413 Payload Too Large` with the same JSON shape. Internal errors use `500` with a generic message. N8N displays an inline banner with the `message` field.
+ - **FR-018**: N8N HTTP Request node uses a 5-second timeout and up to 5 retries when calling the backend. Failures surface as per FR-017 with an inline banner.
 
 ### Key Entities *(include if feature involves data)*
 

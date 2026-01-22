@@ -47,5 +47,29 @@ if [[ "${MEASURE_LATENCY:-}" == "1" ]]; then
   echo "[measure] Samples: $N"
   echo "[measure] p50: ${P50}s"
   echo "[measure] p95: ${P95}s (target < 10s)"
+  # Enforce performance gate if requested
+  if [[ "${ENFORCE_GATE:-}" == "1" ]]; then
+    RESULT=$(awk -v v="$P95" 'BEGIN{ if (v < 10.0) print "OK"; else print "FAIL" }')
+    if [[ "$RESULT" == "FAIL" ]]; then
+      echo "[measure] Performance gate failed: p95 >= 10s"
+      rm -f "$TMPFILE"
+      exit 1
+    else
+      echo "[measure] Performance gate passed"
+    fi
+  fi
   rm -f "$TMPFILE"
+fi
+
+# Optional: Verify self-contained constraint (no external paid APIs)
+if [[ "${SELF_CONTAINED_VERIFY:-}" == "1" ]]; then
+  echo "[verify] Checking for external paid API references (OpenAI/Anthropic/Cohere)..."
+  MATCHES=$(grep -R -n -E -i 'openai|anthropic|cohere|ai\\.openai\\.com' app scripts Dockerfile requirements.txt 2>/dev/null || true)
+  if [[ -n "$MATCHES" ]]; then
+    echo "[verify] Found external API references:\n$MATCHES"
+    echo "[verify] Self-contained check failed."
+    exit 2
+  else
+    echo "[verify] Self-contained check passed."
+  fi
 fi
