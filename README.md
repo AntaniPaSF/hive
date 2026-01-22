@@ -7,7 +7,34 @@ This repository provides a self-contained, CPU-only local MVP skeleton for the C
 - Self-Contained (no paid/cloud APIs post-clone)
 - Reproducible (single-command startup; pinned dependencies)
 
+## Current Status
+
+**Phase 1 (P1): PDF Ingestion Pipeline** - ✅ Complete (Merged to main)
+- PDF parsing with structure extraction
+- Semantic chunking with token counting
+- ChromaDB storage (text-based search)
+- CLI ingestion tool
+
+**Phase 2 (P2): Query & RAG Pipeline** - ✅ Tasks 2.1, 2.2, & 2.3 Complete
+- Task 2.1: Query/Retrieval Interface (Complete)
+  - Text-based search with ChromaDB
+  - Interactive CLI for testing
+  - Comprehensive filtering and context retrieval
+- Task 2.2: RAG Pipeline (Complete)
+  - Multi-provider LLM support (OpenAI, Anthropic, Ollama, Mock)
+  - Question answering with citations
+  - Batch processing capabilities
+  - Interactive Q&A interface
+- Task 2.3: API Layer (Complete)
+  - FastAPI REST API with 8 endpoints
+  - OpenAPI/Swagger documentation
+  - Request validation and error handling
+  - 26/27 integration tests passing
+- Task 2.4: Testing & Optimization (Pending)
+
 ## Quickstart (Local)
+
+### Using Docker (Legacy)
 
 1. Export ports (no hardcoded defaults):
 
@@ -29,8 +56,63 @@ make start  # uses runtime compose; requires APP_PORT
 - http://localhost:${APP_PORT}
 - Health: http://localhost:${APP_PORT}/health
 
+### Using Python (Current Development)
+
+1. Setup virtual environment:
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate  # Windows
+# or: source .venv/bin/activate  # Linux/Mac
+pip install -r requirements.txt
+```
+
+2. Ingest documents:
+
+```bash
+# Ingest a single PDF
+python -m app.ingestion.cli --source data/pdf/your_document.pdf
+
+# View ingestion statistics
+python -m app.ingestion.cli --stats
+```
+
+3. Query documents (Retrieval only):
+
+```bash
+# Search documents
+python -m app.query.cli search "vacation policy" --top-k 5
+
+# Interactive search
+python -m app.query.cli interactive
+```
+
+4. Ask questions (RAG with LLM):
+
+```bash
+# Ask with mock LLM (no API key needed)
+python -m app.rag.cli ask "What is the vacation policy?"
+
+# Interactive Q&A
+python -m app.rag.cli interactive
+
+# Batch processing
+python -m app.rag.cli batch sample_questions.txt
+```
+
+5. Run the API server:
+
+```bash
+# Start FastAPI server
+python -m uvicorn app.api.app:app --reload --host 0.0.0.0 --port 8000
+
+# Access API documentation
+# Open browser: http://localhost:8000/docs
+```
+
 ## Standard Commands
 
+### Docker Commands
 ```bash
 make setup    # Build images
 make start    # Start via docker-compose (requires APP_PORT)
@@ -38,6 +120,102 @@ make verify   # Validate compose config + health (if running)
 make stop     # Stop services
 make package  # Produce local image tar + manifest in dist/
 make clean    # Remove containers/images/volumes and dist/
+```
+
+### Python Commands
+
+#### Ingestion
+```bash
+# Ingest PDF document
+python -m app.ingestion.cli --source data/pdf/document.pdf
+
+# Batch ingest directory
+python -m app.ingestion.cli --source data/pdf/ --batch
+
+# View statistics
+python -m app.ingestion.cli --stats
+```
+
+#### Query/Retrieval (Task 2.1)
+```bash
+# Search documents
+python -m app.query.cli search "employee benefits" --top-k 5
+
+# Search with filters
+python -m app.query.cli search "policy" --document handbook.pdf
+
+# Get specific chunk
+python -m app.query.cli chunk <chunk-id>
+
+# Interactive search
+python -m app.query.cli interactive
+
+# Show statistics
+python -m app.query.cli stats
+```
+
+#### RAG Question Answering (Task 2.2)
+```bash
+# Ask question (mock mode)
+python -m app.rag.cli ask "What is the vacation policy?"
+
+# Ask with real LLM (OpenAI)
+python -m app.rag.cli ask "What are employee benefits?" --provider openai --model gpt-4
+
+# Interactive Q&A
+python -m app.rag.cli interactive --provider mock
+
+# Batch questions
+python -m app.rag.cli batch questions.txt --output answers.json
+
+# Show configuration
+python -m app.rag.cli info
+```
+
+#### Testing
+```bash
+# Run all tests
+pytest
+
+# Run specific test module
+pytest tests/unit/test_rag.py -v
+
+# Run integration tests
+pytest tests/integration/test_api.py -v
+
+# Run with coverage
+pytest --cov=app tests/
+```
+
+### API Endpoints (Task 2.3)
+
+Once the server is running at `http://localhost:8000`:
+
+```bash
+# Health check
+curl http://localhost:8000/health
+
+# Ask a question (RAG)
+curl -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What is the vacation policy?", "provider": "mock"}'
+
+# Search documents (retrieval only)
+curl -X POST http://localhost:8000/search \
+  -H "Content-Type: application/json" \
+  -d '{"query": "vacation", "top_k": 5}'
+
+# List documents
+curl http://localhost:8000/documents
+
+# Ingest document
+curl -X POST http://localhost:8000/ingest \
+  -H "Content-Type: application/json" \
+  -d '{"file_path": "data/pdf/handbook.pdf", "batch": false}'
+
+# API documentation
+# Swagger UI: http://localhost:8000/docs
+# ReDoc: http://localhost:8000/redoc
 ```
 
 ## Dev Container

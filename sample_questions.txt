@@ -1,0 +1,13 @@
+# Sample Questions for RAG Pipeline Testing
+# One question per line, lines starting with # are ignored
+
+What is the company's vacation policy?
+What employee benefits are available?
+How do I request time off?
+What is the dress code policy?
+What are the work hours?
+What is the remote work policy?
+How do I report a workplace issue?
+What training programs are available?
+What is the performance review process?
+What are the holidays observed by the company?
